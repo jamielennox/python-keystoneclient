@@ -12,13 +12,17 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
+import functools
 import getpass
 import hashlib
+import logging
 import sys
 
 import prettytable
 
 from keystoneclient import exceptions
+
+_logger = logging.getLogger(__name__)
 
 
 # Decorator for cli-args
@@ -162,3 +166,33 @@ def prompt_for_password():
                 return new_passwd
         except EOFError:
             return
+
+
+def deprecated_msg(name, msg=None):
+    # TODO(jamielennox): replace with something more appropriate like warning
+    deprecated_msg = "%s is deprecated." % name
+    if msg:
+        deprecated_msg += " "
+        deprecated_msg += msg
+
+    _logger.info(deprecated)
+
+
+def deprecated(f):
+    @functools.wraps(f)
+    def wrapper(*args, **kwargs):
+        deprecated_msg(f.__name__)
+        return f(*args, **kwargs)
+    return wrapper
+
+
+def join_url(*args):
+    """A way of combining URLs segments.
+
+    Using six.urljoin has certain edge cases where (for example) if you use a
+    rooted path it will ignore append it directly to the base url. We don't
+    need that fancy stuff (and it will break some configs) so just combine
+    everything with a /
+    """
+    stripped = [a.strip("/") for a in args]
+    return "/".join(stripped)

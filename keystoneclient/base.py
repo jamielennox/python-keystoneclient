@@ -461,3 +461,30 @@ class Resource(object):
 
     def set_loaded(self, val):
         self._loaded = val
+
+
+class BaseClient(object):
+
+    def __init__(self, session):
+        self.session = session
+
+    def client_request(self, url, method, **kwargs):
+        return self.session.client_request(self, url, method, **kwargs)
+
+    def head(self, url, **kwargs):
+        return self.client_request(url, "HEAD", **kwargs)
+
+    def get(self, url, **kwargs):
+        return self.client_request(url, "GET", **kwargs)
+
+    def post(self, url, **kwargs):
+        return self.client_request(url, "POST", **kwargs)
+
+    def put(self, url, **kwargs):
+        return self.client_request(url, "PUT", **kwargs)
+
+    def delete(self, url, **kwargs):
+        return self.client_request(url, "DELETE", **kwargs)
+
+    def patch(self, url, **kwargs):
+        return self.client_request(url, "PATCH", **kwargs)

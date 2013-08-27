@@ -20,3 +20,9 @@ Exception definitions.
 
 #flake8: noqa
 from keystoneclient.apiclient.exceptions import *
+
+
+class NoAuthentication(Exception):
+    pass
+
+

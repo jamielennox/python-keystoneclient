@@ -17,8 +17,10 @@ import uuid
 
 import httpretty
 
+from keystoneclient.auth.identity import v3 as v3_auth
 from keystoneclient.openstack.common import jsonutils
-from keystoneclient.v3 import client
+from keystoneclient import session
+from keystoneclient.v3 import client as v3_client
 
 from tests import utils
 
@@ -130,11 +132,13 @@ class TestCase(UnauthenticatedTestCase):
 
     def setUp(self):
         super(TestCase, self).setUp()
-        self.client = client.Client(username=self.TEST_USER,
-                                    token=self.TEST_TOKEN,
-                                    tenant_name=self.TEST_TENANT_NAME,
-                                    auth_url=self.TEST_URL,
-                                    endpoint=self.TEST_URL)
+        self.auth = v3_auth.Auth(username=self.TEST_USER,
+                                 token=self.TEST_TOKEN,
+                                 project_name=self.TEST_TENANT_NAME,
+                                 auth_url=self.TEST_URL,
+                                 endpoint=self.TEST_URL)
+        self.session = session.ClientSession(self.auth)
+        self.client = v3_client.Client(session=self.session)
 
     def stub_auth(self, subject_token=None, **kwargs):
         if not subject_token:

@@ -14,7 +14,10 @@
 
 import httpretty
 
-from keystoneclient.v2_0 import client
+from keystoneclient.auth.identity import v2 as v2_auth
+from keystoneclient import session
+from keystoneclient.v2_0 import client as v2_client
+
 from tests import utils
 
 TestResponse = utils.TestResponse
@@ -80,11 +83,13 @@ class TestCase(UnauthenticatedTestCase):
 
     def setUp(self):
         super(TestCase, self).setUp()
-        self.client = client.Client(username=self.TEST_USER,
-                                    token=self.TEST_TOKEN,
-                                    tenant_name=self.TEST_TENANT_NAME,
-                                    auth_url=self.TEST_URL,
-                                    endpoint=self.TEST_URL)
+        self.auth = v2_auth.Auth(username=self.TEST_USER,
+                                 token=self.TEST_TOKEN,
+                                 tenant_name=self.TEST_TENANT_NAME,
+                                 auth_url=self.TEST_URL,
+                                 endpoint=self.TEST_URL)
+        self.session = session.ClientSession(self.auth)
+        self.client = v2_client.Client(session=self.session)
 
     def stub_auth(self, **kwargs):
         self.stub_url(httpretty.POST, ['tokens'], **kwargs)
