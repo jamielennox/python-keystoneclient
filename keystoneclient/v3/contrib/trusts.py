@@ -15,6 +15,7 @@
 from keystoneclient import base
 from keystoneclient import exceptions
 from keystoneclient.openstack.common import timeutils
+from keystoneclient.v3 import extensions
 
 
 class Trust(base.Resource):
@@ -30,12 +31,13 @@ class Trust(base.Resource):
     pass
 
 
-class TrustManager(base.CrudManager):
+class TrustManager(base.CrudManager, extensions.Extension):
     """Manager class for manipulating Trusts."""
     resource_class = Trust
     collection_key = 'trusts'
     key = 'trust'
     base_url = '/OS-TRUST'
+    ident = 'OS-TRUST'
 
     def create(self, trustee_user, trustor_user, role_names=None,
                project=None, impersonation=False, expires_at=None):

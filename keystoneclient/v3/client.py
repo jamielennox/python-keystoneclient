@@ -21,6 +21,7 @@ from keystoneclient.v3.contrib import trusts
 from keystoneclient.v3 import credentials
 from keystoneclient.v3 import domains
 from keystoneclient.v3 import endpoints
+from keystoneclient.v3 import extensions
 from keystoneclient.v3 import groups
 from keystoneclient.v3 import policies
 from keystoneclient.v3 import projects
@@ -91,6 +92,7 @@ class Client(httpclient.HTTPClient):
         self.version = 'v3'
         self.credentials = credentials.CredentialManager(self)
         self.endpoints = endpoints.EndpointManager(self)
+        self.extensions = extensions.ExtensionManager(self)
         self.domains = domains.DomainManager(self)
         self.groups = groups.GroupManager(self)
         self.policies = policies.PolicyManager(self)
