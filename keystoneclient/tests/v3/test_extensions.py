@@ -18,6 +18,27 @@ from keystoneclient.tests.v3 import client_fixtures
 from keystoneclient.tests.v3 import utils
 from keystoneclient.v3 import client
 
+SAMPLE_DATA = {
+    "extensions": [
+        {
+            "id": "ext-test-id",
+            "name": "OS-TEST-EXT",
+            "url": "http://identity:35357/v3/OS-TEST-EXT",
+            "links": {
+                "self": "http://identity:35357/v3/extensions/OS-TEST-EXT",
+            },
+            "extra": {
+                "features": ["feature1", "feature5"],
+            }
+        },
+    ],
+    "links": {
+        "self": "http://identity:35357/v3/extensions",
+        "previous": None,
+        "next": None
+    }
+}
+
 
 class ExtensionTests(utils.TestCase):
 
@@ -27,5 +48,17 @@ class ExtensionTests(utils.TestCase):
 
     @httpretty.activate
     def test_do(self):
-        ext = self.client.extensions
+        self.stub_auth(json=client_fixtures.PROJECT_SCOPED_TOKEN),
+
+        self.stub_url(httpretty.GET, ['v3', 'extensions'],
+                      json=SAMPLE_DATA,
+                      base_url='http://admin:35357')
+
+        c = client.Client(user_id='c4da488862bd435c9e6c0275a0d0e49a',
+                          password='password',
+                          user_domain_name='exampledomain',
+                          project_name='exampleproject',
+                          auth_url=self.TEST_URL)
+
+        ext = c.extensions
         import ipdb; ipdb.set_trace()

@@ -19,15 +19,33 @@ import stevedore
 
 logger = logging.getLogger(__name__)
 
+_KNOWN_MANAGERS = None
+
+
+def _load_extension(ext, managers):
+    _KNOWN_MANAGERS[ext.plugin.ident] = ext.obj
+    _KNOWN_MANAGERS[ext.name] = ext.obj
+
+
+def _managers():
+    global _KNOWN_MANAGERS
+
+    if _KNOWN_MANAGERS is None:
+        ext_manager = stevedore.enabled.EnabledExtensionManager(
+            check_func=self._check_enable_ext,
+            namespace='keystoneclient.v3.extension',
+            invoke_on_load=True,
+            invoke_args=(self.client,))
+
+        _KNOWN_MANAGERS = dict()
+        ext_manager.map(_load_extension)
+
+    return _KNOWN_MANAGERS
+
 
 @six.add_metaclass(abc.ABCMeta)
 class Extension(object):
     pass
-
-
-def _load_extension(ext, managers):
-    managers[ext.plugin.ident] = ext.obj
-    managers[ext.name] = ext.obj
 
 
 class ExtensionManager(object):
@@ -39,7 +57,7 @@ class ExtensionManager(object):
     @property
     def managers(self):
         if self._managers is None:
-            # resp, body = self.client.get('/extensions')
+            resp, body = self.client.get('/extensions')
 
             ext_manager = stevedore.enabled.EnabledExtensionManager(
                 check_func=self._check_enable_ext,
