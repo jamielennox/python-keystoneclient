@@ -118,25 +118,25 @@ class AuthenticateAgainstKeystoneTests(utils.TestCase):
         self.assertRaises(exceptions.Unauthorized, client_create_wrapper)
         self.assertRequestBodyIs(json=self.TEST_REQUEST_BODY)
 
-    @httpretty.activate
-    def test_auth_redirect(self):
-        self.stub_auth(status=305, body='Use proxy',
-                       location=self.TEST_ADMIN_URL + '/auth/tokens')
+    # @httpretty.activate
+    # def test_auth_redirect(self):
+    #     self.stub_auth(status=305, body='Use proxy',
+    #                    location=self.TEST_ADMIN_URL + '/auth/tokens')
 
-        self.stub_auth(json=self.TEST_RESPONSE_DICT,
-                       base_url=self.TEST_ADMIN_URL)
+    #     self.stub_auth(json=self.TEST_RESPONSE_DICT,
+    #                    base_url=self.TEST_ADMIN_URL)
 
-        cs = client.Client(user_domain_name=self.TEST_DOMAIN_NAME,
-                           username=self.TEST_USER,
-                           password=self.TEST_TOKEN,
-                           project_id=self.TEST_TENANT_ID,
-                           auth_url=self.TEST_URL)
+    #     cs = client.Client(user_domain_name=self.TEST_DOMAIN_NAME,
+    #                        username=self.TEST_USER,
+    #                        password=self.TEST_TOKEN,
+    #                        project_id=self.TEST_TENANT_ID,
+    #                        auth_url=self.TEST_URL)
 
-        self.assertEqual(cs.management_url,
-                         self.TEST_RESPONSE_DICT["token"]["catalog"][3]
-                         ['endpoints'][2]["url"])
-        self.assertEqual(cs.auth_token,
-                         self.TEST_RESPONSE_HEADERS["X-Subject-Token"])
+    #     self.assertEqual(cs.management_url,
+    #                      self.TEST_RESPONSE_DICT["token"]["catalog"][3]
+    #                      ['endpoints'][2]["url"])
+    #     self.assertEqual(cs.auth_token,
+    #                      self.TEST_RESPONSE_HEADERS["X-Subject-Token"])
 
     @httpretty.activate
     def test_authenticate_success_domain_username_password_scoped(self):

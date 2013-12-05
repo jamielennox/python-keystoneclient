@@ -107,25 +107,25 @@ class AuthenticateAgainstKeystoneTests(utils.TestCase):
         self.assertRaises(exceptions.Unauthorized, client_create_wrapper)
         self.assertRequestBodyIs(json=self.TEST_REQUEST_BODY)
 
-    @httpretty.activate
-    def test_auth_redirect(self):
-        self.stub_auth(status=305, body='Use Proxy',
-                       location=self.TEST_ADMIN_URL + "/tokens")
+    # @httpretty.activate
+    # def test_auth_redirect(self):
+    #     self.stub_auth(status=305, body='Use Proxy',
+    #                    location=self.TEST_ADMIN_URL + "/tokens")
 
-        self.stub_auth(base_url=self.TEST_ADMIN_URL,
-                       json=self.TEST_RESPONSE_DICT)
+    #     self.stub_auth(base_url=self.TEST_ADMIN_URL,
+    #                    json=self.TEST_RESPONSE_DICT)
 
-        cs = client.Client(username=self.TEST_USER,
-                           password=self.TEST_TOKEN,
-                           tenant_id=self.TEST_TENANT_ID,
-                           auth_url=self.TEST_URL)
+    #     cs = client.Client(username=self.TEST_USER,
+    #                        password=self.TEST_TOKEN,
+    #                        tenant_id=self.TEST_TENANT_ID,
+    #                        auth_url=self.TEST_URL)
 
-        self.assertEqual(cs.management_url,
-                         self.TEST_RESPONSE_DICT["access"]["serviceCatalog"][3]
-                         ['endpoints'][0]["adminURL"])
-        self.assertEqual(cs.auth_token,
-                         self.TEST_RESPONSE_DICT["access"]["token"]["id"])
-        self.assertRequestBodyIs(json=self.TEST_REQUEST_BODY)
+    #     self.assertEqual(cs.management_url,
+    #                      self.TEST_RESPONSE_DICT["access"]["serviceCatalog"][3]
+    #                      ['endpoints'][0]["adminURL"])
+    #     self.assertEqual(cs.auth_token,
+    #                      self.TEST_RESPONSE_DICT["access"]["token"]["id"])
+    #     self.assertRequestBodyIs(json=self.TEST_REQUEST_BODY)
 
     @httpretty.activate
     def test_authenticate_success_password_scoped(self):

@@ -40,6 +40,8 @@ if not hasattr(urlparse, 'parse_qsl'):
 
 
 from keystoneclient import access
+from keystoneclient.auth.identity import base
+from keystoneclient import baseclient
 from keystoneclient import exceptions
 from keystoneclient.openstack.common import jsonutils
 from keystoneclient import session as client_session
@@ -53,7 +55,7 @@ USER_AGENT = client_session.USER_AGENT
 request = client_session.request
 
 
-class HTTPClient(object):
+class HTTPClient(baseclient.Client, base.BaseIdentityPlugin):
 
     def __init__(self, username=None, tenant_id=None, tenant_name=None,
                  password=None, auth_url=None, region_name=None, timeout=None,
@@ -124,8 +126,9 @@ class HTTPClient(object):
                                communicating with the identity service.
 
         """
-        # set baseline defaults
+        base.BaseIdentityPlugin.__init__(self, auth_url=None)
 
+        # set baseline defaults
         self.user_id = None
         self.username = None
         self.user_domain_id = None
@@ -233,13 +236,14 @@ class HTTPClient(object):
                              "key. Ignoring.")
 
             timeout = float(timeout) if timeout is not None else None
-            session = client_session.Session(verify=verify,
+            session = client_session.Session(auth=self,
+                                             verify=verify,
                                              cert=session_cert,
                                              original_ip=original_ip,
                                              timeout=timeout,
                                              debug=debug)
 
-        self.session = session
+        super(HTTPClient, self).__init__(session=session)
         self.domain = ''
 
         # logging setup
@@ -261,11 +265,18 @@ class HTTPClient(object):
 
     @property
     def auth_token(self):
+        try:
+            return self.get_token()
+        except exceptions.AuthPluginUnauthenticated:
+            self.authenticate()
+            return self.auth_ref.auth_token
+
+    def get_token(self):
         if self.auth_token_from_user:
             return self.auth_token_from_user
         if self.auth_ref:
             if self.auth_ref.will_expire_soon(self.stale_duration):
-                self.authenticate()
+                raise exceptions.AuthPluginUnauthenticated()
             return self.auth_ref.auth_token
 
     @auth_token.setter
@@ -299,12 +310,16 @@ class HTTPClient(object):
         """
         return self.project_name
 
-    def authenticate(self, username=None, password=None, tenant_name=None,
-                     tenant_id=None, auth_url=None, token=None,
-                     user_id=None, domain_name=None, domain_id=None,
-                     project_name=None, project_id=None, user_domain_id=None,
-                     user_domain_name=None, project_domain_id=None,
-                     project_domain_name=None, trust_id=None):
+    def authenticate(self, **kwargs):
+        return self.session.do_authenticate(**kwargs)
+
+    def do_authenticate(self, session=None, username=None, password=None,
+                        tenant_name=None, tenant_id=None, auth_url=None,
+                        token=None, user_id=None, domain_name=None,
+                        domain_id=None, project_name=None, project_id=None,
+                        user_domain_id=None, user_domain_name=None,
+                        project_domain_id=None, project_domain_name=None,
+                        trust_id=None):
         """Authenticate user.
 
         Uses the data provided at instantiation to authenticate against
@@ -348,6 +363,7 @@ class HTTPClient(object):
         * if force_new_token is true
 
         """
+        session = session or self.session
         auth_url = auth_url or self.auth_url
         user_id = user_id or self.user_id
         username = username or self.username
@@ -390,8 +406,13 @@ class HTTPClient(object):
         if auth_ref is None or self.force_new_token:
             new_token_needed = True
             kwargs['password'] = password
-            resp, body = self.get_raw_token_from_identity_service(**kwargs)
-            self.auth_ref = access.AccessInfo.factory(resp, body)
+            kwargs['session'] = session
+
+            resp_data = self.get_raw_token_from_identity_service(**kwargs)
+            if isinstance(resp_data, access.AccessInfo):
+                self.auth_ref = resp_data
+            else:
+                self.auth_ref = access.AccessInfo.factory(*resp_data)
         else:
             self.auth_ref = auth_ref
         self.process_token()
@@ -549,7 +570,8 @@ class HTTPClient(object):
         except KeyError:
             pass
 
-        resp = self.session.request(url, method, **kwargs)
+        kwargs.setdefault('authenticated', False)
+        resp = super(HTTPClient, self).request(url, method, **kwargs)
 
         # NOTE(jamielennox): The requests lib will handle the majority of
         # redirections. Where it fails is when POSTs are redirected which
@@ -568,9 +590,7 @@ class HTTPClient(object):
         concatenating self.management_url and url and passing in method and
         any associated kwargs.
         """
-
         is_management = kwargs.pop('management', True)
-
         if is_management and self.management_url is None:
             raise exceptions.AuthorizationFailure(
                 'Current authorization does not have a known management url')
@@ -579,13 +599,10 @@ class HTTPClient(object):
         if is_management:
             url_to_use = self.management_url
 
-        kwargs.setdefault('headers', {})
-        if self.auth_token:
-            kwargs['headers']['X-Auth-Token'] = self.auth_token
+        kwargs.setdefault('authenticated', None)
 
-        resp, body = self.request(url_to_use + url, method,
-                                  **kwargs)
-        return resp, body
+        return self.request(url_to_use + url, method,
+                            **kwargs)
 
     def get(self, url, **kwargs):
         return self._cs_request(url, 'GET', **kwargs)

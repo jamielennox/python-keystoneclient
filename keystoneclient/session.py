@@ -33,8 +33,8 @@ class Session(object):
 
     user_agent = None
 
-    def __init__(self, session=None, original_ip=None, verify=True, cert=None,
-                 timeout=None, debug=False, user_agent=None):
+    def __init__(self, auth=None, session=None, original_ip=None, verify=True,
+                 cert=None, timeout=None, debug=False, user_agent=None):
         """Maintains client communication state and common functionality.
 
         As much as possible the parameters to this class reflect and are passed
@@ -65,6 +65,7 @@ class Session(object):
         if not session:
             session = requests.Session()
 
+        self.auth = auth
         self.session = session
         self.original_ip = original_ip
         self.verify = verify
@@ -80,7 +81,7 @@ class Session(object):
             self.user_agent = user_agent
 
     def request(self, url, method, json=None, original_ip=None, debug=None,
-                logger=None, user_agent=None, **kwargs):
+                logger=None, user_agent=None, authenticated=None, **kwargs):
         """Send an HTTP request with the specified characteristics.
 
         Wrapper around `requests.Session.request` to handle tasks such as
@@ -111,6 +112,20 @@ class Session(object):
         """
 
         headers = kwargs.setdefault('headers', dict())
+
+        if authenticated is None:
+            authenticated = self.auth is not None
+
+        if authenticated:
+            if not self.auth:
+                raise exceptions.MissingAuthPlugin("Token Required")
+
+            token = self.auth.get_token()
+
+            if not token:
+                raise exceptions.AuthorizationFailure("No token Available")
+
+            headers['X-Auth-Token'] = token
 
         if self.cert:
             kwargs.setdefault('cert', self.cert)
@@ -199,3 +214,10 @@ class Session(object):
 
     def patch(self, url, **kwargs):
         return self.request(url, 'PATCH', **kwargs)
+
+    def do_authenticate(self, **kwargs):
+        if not self.auth:
+            raise exceptions.MissingAuthPlugin("No plugin to authenticate")
+
+        kwargs['session'] = self
+        return self.auth.do_authenticate(**kwargs)
