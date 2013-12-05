@@ -58,3 +58,14 @@ class BaseIdentityPlugin(base.BaseAuthPlugin):
             self.auth_ref = self.get_auth_ref(session)
 
         return self.auth_ref.auth_token
+
+    def get_endpoint(self, service_type, endpoint_type, **kwargs):
+        if not endpoint_type:
+            endpoint_type = 'public'
+
+        if not self.auth_ref:
+            raise exceptions.AuthPluginUnauthenticated()
+
+        return self.auth_ref.service_catalog.url_for(
+            service_type=service_type,
+            endpoint_type=endpoint_type)

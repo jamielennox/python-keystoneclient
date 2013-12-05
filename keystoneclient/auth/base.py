@@ -27,9 +27,20 @@ class BaseAuthPlugin(object):
         How the token is obtained is up to the plugin. If it is still valid
         it may be re-used, retrieved from cache or invoke an authentication
         request against a server.
+        """
 
-        Returning None will indicate that no token was able to be retrieved.
+    @abc.abstractmethod
+    def get_endpoint(self, session, service_type=None,
+                     endpoint_type=None, **kwargs):
+        """Return an endpoint for the client.
 
-        :param session: A session object so the plugin can make HTTP calls.
-        :return string: A token to use.
+        The endpoint should reflect the type of service required, whether it
+        should use the public, admin or private url.
+
+        :param Session session: The session object that the auth_plugin
+                                belongs to. (optional)
+        :param string service_type: The service type to query the URL for.
+                                    (optional)
+        :param string endpoint_type: The endpoint type to query a URL for.
+                                     (optional)
         """
