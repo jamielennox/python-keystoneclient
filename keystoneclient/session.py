@@ -34,7 +34,8 @@ class Session(object):
     user_agent = None
 
     def __init__(self, auth=None, session=None, original_ip=None, verify=True,
-                 cert=None, timeout=None, debug=False, user_agent=None):
+                 cert=None, timeout=None, debug=False, user_agent=None,
+                 requests_auth=None):
         """Maintains client communication state and common functionality.
 
         As much as possible the parameters to this class reflect and are passed
@@ -72,6 +73,7 @@ class Session(object):
         self.cert = cert
         self.timeout = None
         self.debug = debug
+        self.requests_auth = requests_auth
 
         if timeout is not None:
             self.timeout = float(timeout)
@@ -81,7 +83,9 @@ class Session(object):
             self.user_agent = user_agent
 
     def request(self, url, method, json=None, original_ip=None, debug=None,
-                logger=None, user_agent=None, authenticated=None, **kwargs):
+                logger=None, user_agent=None, authenticated=None,
+                service_type=None, endpoint_type=None, auth=None,
+                requests_auth=None, **kwargs):
         """Send an HTTP request with the specified characteristics.
 
         Wrapper around `requests.Session.request` to handle tasks such as
@@ -126,6 +130,20 @@ class Session(object):
                 raise exceptions.AuthorizationFailure("No token Available")
 
             headers['X-Auth-Token'] = token
+
+        if service_type:
+            if not self.auth:
+                raise exceptions.MissingAuthPlugin("Service Catalog Required")
+
+            base_url = self.auth.get_endpoint(service_type=service_type,
+                                              endpoint_type=endpoint_type)
+
+            if not base_url:
+                raise exception.EndpointNotFound()
+
+            # TODO(jamielennox): be cleverer about this, check if url already
+            # has a netloc and what does that mean?
+            url = "%s/%s" % (base_url.rstrip("/"), url.lstrip("/"))
 
         if self.cert:
             kwargs.setdefault('cert', self.cert)
@@ -173,6 +191,10 @@ class Session(object):
             data = kwargs.get('data')
             if data:
                 logger.debug('REQ BODY: %s', data)
+
+        requests_auth = requests_auth or self.requests_auth
+        if requests_auth:
+            kwargs['auth'] = requests_auth
 
         try:
             resp = self.session.request(method, url, **kwargs)

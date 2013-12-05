@@ -15,11 +15,21 @@
 
 class Client(object):
 
+    service_type = None
+    endpoint_type = None
+
     def __init__(self, session):
         self.session = session
 
     def request(self, url, method, **kwargs):
         kwargs.setdefault('authenticated', True)
+
+        if self.service_type:
+            kwargs.setdefault('service_type', self.service_type)
+
+        if self.endpoint_type:
+            kwargs.setdefault('endpoint_type', self.endpoint_type)
+
         return self.session.request(url, method, **kwargs)
 
     def get(self, url, **kwargs):
