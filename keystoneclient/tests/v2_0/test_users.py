@@ -13,12 +13,13 @@
 #    under the License.
 
 import httpretty
+from testscenarios import load_tests_apply_scenarios as load_tests  # noqa
 
 from keystoneclient.tests.v2_0 import utils
 from keystoneclient.v2_0 import users
 
 
-class UserTests(utils.TestCase):
+class UserTests(utils.ClientTestCase):
     def setUp(self):
         super(UserTests, self).setUp()
         self.TEST_USERS = {
@@ -209,6 +210,9 @@ class UserTests(utils.TestCase):
 
     @httpretty.activate
     def test_update_own_password(self):
+        self.skipIfSession("Setting parameters on client won't be reflected "
+                           "when using a session")
+
         req_body = {
             'user': {
                 'password': 'ABCD', 'original_password': 'DCBA'

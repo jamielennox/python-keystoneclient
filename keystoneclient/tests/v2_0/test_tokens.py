@@ -13,11 +13,13 @@
 #    under the License.
 
 import httpretty
+from testscenarios import load_tests_apply_scenarios as load_tests  # noqa
 
 from keystoneclient.tests.v2_0 import utils
 
 
-class TokenTests(utils.TestCase):
+class TokenTests(utils.ClientTestCase):
+
     @httpretty.activate
     def test_delete(self):
         self.stub_url(httpretty.DELETE, ['tokens', '1'], status=204)

@@ -15,13 +15,15 @@
 
 import uuid
 
+from testscenarios import load_tests_apply_scenarios as load_tests  # noqa
+
 from keystoneclient import exceptions
 from keystoneclient.openstack.common import timeutils
 from keystoneclient.tests.v3 import utils
 from keystoneclient.v3.contrib import trusts
 
 
-class TrustTests(utils.TestCase, utils.CrudTests):
+class TrustTests(utils.ClientTestCase, utils.CrudTests):
     def setUp(self):
         super(TrustTests, self).setUp()
         self.key = 'trust'

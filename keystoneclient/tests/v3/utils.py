@@ -17,7 +17,10 @@ import uuid
 import httpretty
 from six.moves.urllib import parse as urlparse
 
+from keystoneclient.auth.identity import v3 as v3_auth
+from keystoneclient.auth import token_endpoint
 from keystoneclient.openstack.common import jsonutils
+from keystoneclient import session
 from keystoneclient.tests import utils
 from keystoneclient.v3 import client
 
@@ -127,13 +130,8 @@ class TestCase(UnauthenticatedTestCase):
         "type": "object-store"
     }]
 
-    def setUp(self):
-        super(TestCase, self).setUp()
-        self.client = client.Client(username=self.TEST_USER,
-                                    token=self.TEST_TOKEN,
-                                    tenant_name=self.TEST_TENANT_NAME,
-                                    auth_url=self.TEST_URL,
-                                    endpoint=self.TEST_URL)
+    scenarios = [('original_client', dict(client_method='_original_client')),
+                 ('client_session', dict(client_method='_client_session'))]
 
     def stub_auth(self, subject_token=None, **kwargs):
         if not subject_token:
@@ -141,6 +139,33 @@ class TestCase(UnauthenticatedTestCase):
 
         self.stub_url(httpretty.POST, ['auth', 'tokens'],
                       X_Subject_Token=subject_token, **kwargs)
+
+    def _original_client(self, **kwargs):
+        if kwargs:
+            return client.Client(**kwargs)
+        else:
+            return client.Client(username=self.TEST_USER,
+                                 token=self.TEST_TOKEN,
+                                 tenant_name=self.TEST_TENANT_NAME,
+                                 auth_url=self.TEST_URL,
+                                 endpoint=self.TEST_URL)
+
+    def _client_session(self, **kwargs):
+        if kwargs:
+            auth = v3_auth.Auth(**kwargs)
+        else:
+            auth = token_endpoint.Auth(endpoint=self.TEST_URL,
+                                       token=self.TEST_TOKEN)
+
+        ses = session.Session(auth=auth)
+        return client.Client(session=ses)
+
+
+class ClientTestCase(TestCase):
+
+    def setUp(self):
+        super(TestCase, self).setUp()
+        self.client = self.get_client()
 
 
 class CrudTests(object):

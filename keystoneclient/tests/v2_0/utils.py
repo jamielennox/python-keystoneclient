@@ -14,6 +14,9 @@
 
 import httpretty
 
+from keystoneclient.auth.identity import v2 as v2_auth
+from keystoneclient.auth import token_endpoint
+from keystoneclient import session
 from keystoneclient.tests import utils
 from keystoneclient.v2_0 import client
 
@@ -78,13 +81,34 @@ class TestCase(UnauthenticatedTestCase):
         "name": "swift"
     }]
 
-    def setUp(self):
-        super(TestCase, self).setUp()
-        self.client = client.Client(username=self.TEST_USER,
-                                    token=self.TEST_TOKEN,
-                                    tenant_name=self.TEST_TENANT_NAME,
-                                    auth_url=self.TEST_URL,
-                                    endpoint=self.TEST_URL)
+    scenarios = [('original_client', dict(client_method='_original_client')),
+                 ('client_session', dict(client_method='_client_session'))]
 
     def stub_auth(self, **kwargs):
         self.stub_url(httpretty.POST, ['tokens'], **kwargs)
+
+    def _original_client(self, **kwargs):
+        if kwargs:
+            return client.Client(**kwargs)
+        else:
+            return client.Client(username=self.TEST_USER,
+                                 token=self.TEST_TOKEN,
+                                 tenant_name=self.TEST_TENANT_NAME,
+                                 auth_url=self.TEST_URL,
+                                 endpoint=self.TEST_URL)
+
+    def _client_session(self, **kwargs):
+        if kwargs:
+            auth = v2_auth.Auth(**kwargs)
+        else:
+            auth = token_endpoint.Auth(endpoint=self.TEST_URL,
+                                       token=self.TEST_TOKEN)
+        ses = session.Session(auth=auth)
+        return client.Client(session=ses)
+
+
+class ClientTestCase(TestCase):
+
+    def setUp(self):
+        super(TestCase, self).setUp()
+        self.client = getattr(self, self.client_method)()

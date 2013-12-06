@@ -14,11 +14,13 @@
 
 import uuid
 
+from testscenarios import load_tests_apply_scenarios as load_tests  # noqa
+
 from keystoneclient.tests.v3 import utils
 from keystoneclient.v3 import policies
 
 
-class PolicyTests(utils.TestCase, utils.CrudTests):
+class PolicyTests(utils.ClientTestCase, utils.CrudTests):
     def setUp(self):
         super(PolicyTests, self).setUp()
         self.key = 'policy'

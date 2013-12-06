@@ -17,13 +17,14 @@
 import uuid
 
 import httpretty
+from testscenarios import load_tests_apply_scenarios as load_tests  # noqa
 
 from keystoneclient import exceptions
 from keystoneclient.tests.v3 import utils
 from keystoneclient.v3 import users
 
 
-class UserTests(utils.TestCase, utils.CrudTests):
+class UserTests(utils.ClientTestCase, utils.CrudTests):
     def setUp(self):
         super(UserTests, self).setUp()
         self.key = 'user'

@@ -14,6 +14,8 @@
 
 import datetime
 
+from testscenarios import load_tests_apply_scenarios as load_tests  # noqa
+
 from keystoneclient import access
 from keystoneclient.openstack.common import timeutils
 from keystoneclient.tests import client_fixtures as token_data

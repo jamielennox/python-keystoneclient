@@ -114,14 +114,19 @@ class Client(httpclient.HTTPClient):
         And set the relevant authentication information.
         """
         super(Client, self).process_token()
-        if self.auth_ref.domain_scoped:
-            if not self.auth_ref.domain_id:
-                raise exceptions.AuthorizationFailure(
-                    "Token didn't provide domain_id")
-            if self.management_url is None and self.auth_ref.management_url:
-                self.management_url = self.auth_ref.management_url[0]
-            self.domain_name = self.auth_ref.domain_name
-            self.domain_id = self.auth_ref.domain_id
+        if self.auth_ref:
+            if self.auth_ref.domain_scoped:
+                if not self.auth_ref.domain_id:
+                    raise exceptions.AuthorizationFailure(
+                        "Token didn't provide domain_id")
+                if self.management_url is None and self.auth_ref.management_url:
+                    self.management_url = self.auth_ref.management_url[0]
+                self.domain_name = self.auth_ref.domain_name
+                self.domain_id = self.auth_ref.domain_id
+        else:
+            self.domain_name = None
+            self.domain_id = None
+
 
     def get_raw_token_from_identity_service(self, session, auth_url, **kwargs):
         """Authenticate against the v3 Identity API.

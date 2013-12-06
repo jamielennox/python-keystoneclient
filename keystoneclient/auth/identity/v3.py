@@ -15,10 +15,12 @@
 from keystoneclient import access
 from keystoneclient.auth.identity import base
 
+from keystoneclient import exceptions
+
 
 class Auth(base.BaseIdentityPlugin):
 
-    def __init__(self, auth_url, token=None, trust_id=None,
+    def __init__(self, auth_url=None, token=None, trust_id=None,
                  user_id=None, username=None, password=None,
                  domain_id=None, domain_name=None,
                  user_domain_id=None, user_domain_name=None,
@@ -46,7 +48,8 @@ class Auth(base.BaseIdentityPlugin):
         token = kwargs.get('token', self.token)
 
         if not auth_url:
-            raise ValueError("Cannot authenticate without a valid auth_url")
+            raise exceptions.AuthorizationFailure("Cannot authenticate without"
+                                                  " a valid auth_url")
 
         headers = {}
         url = auth_url + "/auth/tokens"
@@ -88,8 +91,9 @@ class Auth(base.BaseIdentityPlugin):
         project_name = kwargs.get('project_name', self.project_name)
 
         if ((domain_id or domain_name) and (project_id or project_name)):
-            raise ValueError('Authentication cannot be scoped to both domain'
-                             ' and project.')
+            raise exceptions.AuthorizationFailure('Authentication cannot be '
+                                                  'scoped to both domain '
+                                                  'and project.')
 
         if domain_id:
             body['auth']['scope'] = {'domain': {'id': domain_id}}
@@ -118,7 +122,8 @@ class Auth(base.BaseIdentityPlugin):
             scope['OS-TRUST:trust'] = {'id': trust_id}
 
         if not ident:
-            raise ValueError('Authentication method required (e.g. password)')
+            raise exceptions.AuthorizationFailure('Authentication method '
+                                                  'required (e.g. password)')
 
         resp = session.post(url, json=body, headers=headers,
                             authenticated=False)

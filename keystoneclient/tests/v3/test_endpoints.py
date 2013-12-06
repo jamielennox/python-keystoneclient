@@ -14,12 +14,14 @@
 
 import uuid
 
+from testscenarios import load_tests_apply_scenarios as load_tests  # noqa
+
 from keystoneclient import exceptions
 from keystoneclient.tests.v3 import utils
 from keystoneclient.v3 import endpoints
 
 
-class EndpointTests(utils.TestCase, utils.CrudTests):
+class EndpointTests(utils.ClientTestCase, utils.CrudTests):
     def setUp(self):
         super(EndpointTests, self).setUp()
         self.key = 'endpoint'

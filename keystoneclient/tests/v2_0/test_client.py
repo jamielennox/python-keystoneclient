@@ -16,11 +16,11 @@ import copy
 import json
 
 import httpretty
+from testscenarios import load_tests_apply_scenarios as load_tests  # noqa
 
 from keystoneclient import exceptions
 from keystoneclient.tests.v2_0 import client_fixtures
 from keystoneclient.tests.v2_0 import utils
-from keystoneclient.v2_0 import client
 
 
 class KeystoneClientTest(utils.TestCase):
@@ -29,41 +29,44 @@ class KeystoneClientTest(utils.TestCase):
     def test_unscoped_init(self):
         self.stub_auth(json=client_fixtures.UNSCOPED_TOKEN)
 
-        c = client.Client(username='exampleuser',
-                          password='password',
-                          auth_url=self.TEST_URL)
-        self.assertIsNotNone(c.auth_ref)
-        self.assertFalse(c.auth_ref.scoped)
-        self.assertFalse(c.auth_ref.domain_scoped)
-        self.assertFalse(c.auth_ref.project_scoped)
-        self.assertIsNone(c.auth_ref.trust_id)
-        self.assertFalse(c.auth_ref.trust_scoped)
+        c = self.get_client(username='exampleuser',
+                            password='password',
+                            auth_url=self.TEST_URL)
+        auth_ref = self.get_auth_ref(c)
+        self.assertIsNotNone(auth_ref)
+        self.assertFalse(auth_ref.scoped)
+        self.assertFalse(auth_ref.domain_scoped)
+        self.assertFalse(auth_ref.project_scoped)
+        self.assertIsNone(auth_ref.trust_id)
+        self.assertFalse(auth_ref.trust_scoped)
 
     @httpretty.activate
     def test_scoped_init(self):
         self.stub_auth(json=client_fixtures.PROJECT_SCOPED_TOKEN)
 
-        c = client.Client(username='exampleuser',
-                          password='password',
-                          tenant_name='exampleproject',
-                          auth_url=self.TEST_URL)
-        self.assertIsNotNone(c.auth_ref)
-        self.assertTrue(c.auth_ref.scoped)
-        self.assertTrue(c.auth_ref.project_scoped)
-        self.assertFalse(c.auth_ref.domain_scoped)
-        self.assertIsNone(c.auth_ref.trust_id)
-        self.assertFalse(c.auth_ref.trust_scoped)
+        c = self.get_client(username='exampleuser',
+                            password='password',
+                            tenant_name='exampleproject',
+                            auth_url=self.TEST_URL)
+        auth_ref = self.get_auth_ref(c)
+        self.assertIsNotNone(auth_ref)
+        self.assertTrue(auth_ref.scoped)
+        self.assertTrue(auth_ref.project_scoped)
+        self.assertFalse(auth_ref.domain_scoped)
+        self.assertIsNone(auth_ref.trust_id)
+        self.assertFalse(auth_ref.trust_scoped)
 
     @httpretty.activate
     def test_auth_ref_load(self):
+        self.skipIfSession("Auth Ref loading not supported by auth plugins")
         self.stub_auth(json=client_fixtures.PROJECT_SCOPED_TOKEN)
 
-        cl = client.Client(username='exampleuser',
-                           password='password',
-                           tenant_name='exampleproject',
-                           auth_url=self.TEST_URL)
+        cl = self.get_client(username='exampleuser',
+                             password='password',
+                             tenant_name='exampleproject',
+                             auth_url=self.TEST_URL)
         cache = json.dumps(cl.auth_ref)
-        new_client = client.Client(auth_ref=json.loads(cache))
+        new_client = self.get_client(auth_ref=json.loads(cache))
         self.assertIsNotNone(new_client.auth_ref)
         self.assertTrue(new_client.auth_ref.scoped)
         self.assertTrue(new_client.auth_ref.project_scoped)
@@ -77,16 +80,17 @@ class KeystoneClientTest(utils.TestCase):
 
     @httpretty.activate
     def test_auth_ref_load_with_overridden_arguments(self):
+        self.skipIfSession("Auth Ref loading not supported by auth plugins")
         self.stub_auth(json=client_fixtures.PROJECT_SCOPED_TOKEN)
 
-        cl = client.Client(username='exampleuser',
-                           password='password',
-                           tenant_name='exampleproject',
-                           auth_url=self.TEST_URL)
+        cl = self.get_client(username='exampleuser',
+                             password='password',
+                             tenant_name='exampleproject',
+                             auth_url=self.TEST_URL)
         cache = json.dumps(cl.auth_ref)
         new_auth_url = "http://new-public:5000/v2.0"
-        new_client = client.Client(auth_ref=json.loads(cache),
-                                   auth_url=new_auth_url)
+        new_client = self.get_client(auth_ref=json.loads(cache),
+                                     auth_url=new_auth_url)
         self.assertIsNotNone(new_client.auth_ref)
         self.assertTrue(new_client.auth_ref.scoped)
         self.assertTrue(new_client.auth_ref.scoped)
@@ -102,7 +106,7 @@ class KeystoneClientTest(utils.TestCase):
 
     def test_init_err_no_auth_url(self):
         self.assertRaises(exceptions.AuthorizationFailure,
-                          client.Client,
+                          self.get_client,
                           username='exampleuser',
                           password='password')
 
@@ -120,13 +124,14 @@ class KeystoneClientTest(utils.TestCase):
                                        'region': 'RegionOne'}]
 
         self.stub_auth(json=client_fixtures.PROJECT_SCOPED_TOKEN)
-        cl = client.Client(username='exampleuser',
-                           password='password',
-                           tenant_name='exampleproject',
-                           auth_url=self.TEST_URL)
+        cl = self.get_client(username='exampleuser',
+                             password='password',
+                             tenant_name='exampleproject',
+                             auth_url=self.TEST_URL)
 
-        self.assertEqual(cl.management_url, first_url)
+        self.assertEqual(self.get_management_url(cl), first_url)
 
         self.stub_auth(json=second)
         cl.authenticate()
-        self.assertEqual(cl.management_url, second_url % 35357)
+
+        self.assertEqual(self.get_management_url(cl), second_url % 35357)

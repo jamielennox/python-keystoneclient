@@ -318,16 +318,13 @@ class HTTPClient(baseclient.Client, base.BaseIdentityPlugin):
         """
         return self.project_name
 
-    def authenticate(self, **kwargs):
-        return self.session.do_authenticate(**kwargs)
-
-    def do_authenticate(self, session=None, username=None, password=None,
-                        tenant_name=None, tenant_id=None, auth_url=None,
-                        token=None, user_id=None, domain_name=None,
-                        domain_id=None, project_name=None, project_id=None,
-                        user_domain_id=None, user_domain_name=None,
-                        project_domain_id=None, project_domain_name=None,
-                        trust_id=None):
+    def authenticate(self, session=None, username=None, password=None,
+                     tenant_name=None, tenant_id=None, auth_url=None,
+                     token=None, user_id=None, domain_name=None,
+                     domain_id=None, project_name=None, project_id=None,
+                     user_domain_id=None, user_domain_name=None,
+                     project_domain_id=None, project_domain_name=None,
+                     trust_id=None, **discard_kwargs):
         """Authenticate user.
 
         Uses the data provided at instantiation to authenticate against
@@ -409,24 +406,37 @@ class HTTPClient(baseclient.Client, base.BaseIdentityPlugin):
             'token': token,
             'trust_id': trust_id,
         }
+
         (keyring_key, auth_ref) = self.get_auth_ref_from_keyring(**kwargs)
-        new_token_needed = False
+
         if auth_ref is None or self.force_new_token:
-            new_token_needed = True
             kwargs['password'] = password
             kwargs['session'] = session
+            kwargs['keyring_key'] = keyring_key
 
-            resp_data = self.get_raw_token_from_identity_service(**kwargs)
-            if isinstance(resp_data, access.AccessInfo):
-                self.auth_ref = resp_data
+            self.session.do_authenticate(**kwargs)
+
+            try:
+                self.auth_ref = self.session.auth.auth_ref
+            except AttributeError:
+                self.auth_ref = None
             else:
-                self.auth_ref = access.AccessInfo.factory(*resp_data)
+                self.process_token()
+                self.store_auth_ref_into_keyring(keyring_key)
         else:
             self.auth_ref = auth_ref
-        self.process_token()
-        if new_token_needed:
+            self.process_token()
             self.store_auth_ref_into_keyring(keyring_key)
+
         return True
+
+    def do_authenticate(self, keyring_key=None, **kwargs):
+        resp_data = self.get_raw_token_from_identity_service(**kwargs)
+
+        if isinstance(resp_data, access.AccessInfo):
+            self.auth_ref = resp_data
+        else:
+            self.auth_ref = access.AccessInfo.factory(*resp_data)
 
     def _build_keyring_key(self, **kwargs):
         """Create a unique key for keyring.
@@ -486,24 +496,33 @@ class HTTPClient(baseclient.Client, base.BaseIdentityPlugin):
         # if we got a response without a service catalog, set the local
         # list of tenants for introspection, and leave to client user
         # to determine what to do. Otherwise, load up the service catalog
-        if self.auth_ref.project_scoped:
-            if not self.auth_ref.tenant_id:
+        if self.auth_ref:
+            if self.auth_ref.project_scoped:
+                if not self.auth_ref.tenant_id:
+                    raise exceptions.AuthorizationFailure(
+                        "Token didn't provide tenant_id")
+                if self.auth_ref.management_url:
+                    self._management_url = self.auth_ref.management_url[0]
+                self.project_name = self.auth_ref.tenant_name
+                self.project_id = self.auth_ref.tenant_id
+
+            if not self.auth_ref.user_id:
                 raise exceptions.AuthorizationFailure(
-                    "Token didn't provide tenant_id")
-            if self.auth_ref.management_url:
-                self._management_url = self.auth_ref.management_url[0]
-            self.project_name = self.auth_ref.tenant_name
-            self.project_id = self.auth_ref.tenant_id
+                    "Token didn't provide user_id")
 
-        if not self.auth_ref.user_id:
-            raise exceptions.AuthorizationFailure(
-                "Token didn't provide user_id")
+            self.user_id = self.auth_ref.user_id
 
-        self.user_id = self.auth_ref.user_id
-
-        self.auth_domain_id = self.auth_ref.domain_id
-        self.auth_tenant_id = self.auth_ref.tenant_id
-        self.auth_user_id = self.auth_ref.user_id
+            self.auth_domain_id = self.auth_ref.domain_id
+            self.auth_tenant_id = self.auth_ref.tenant_id
+            self.auth_user_id = self.auth_ref.user_id
+        else:
+            self.auth_ref._management_url = None
+            self.project_name = None
+            self.project_id = None
+            sefl.user_id = None
+            self.auth_domain_id = None
+            self.auth_tenant_id = None
+            self.auth_user_id = None
 
     @property
     def management_url(self):
@@ -601,6 +620,7 @@ class HTTPClient(baseclient.Client, base.BaseIdentityPlugin):
         if kwargs.pop('management', True):
             kwargs.setdefault('service_type', 'identity')
         else:
+            kwargs['service_type'] = None
             url = "%s/%s" % (self.auth_url.rstrip("/"), url.lstrip("/"))
 
         kwargs.setdefault('authenticated', None)

@@ -13,12 +13,13 @@
 #    under the License.
 
 import httpretty
+from testscenarios import load_tests_apply_scenarios as load_tests  # noqa
 
 from keystoneclient.tests.v2_0 import utils
 from keystoneclient.v2_0 import endpoints
 
 
-class EndpointTests(utils.TestCase):
+class EndpointTests(utils.ClientTestCase):
     def setUp(self):
         super(EndpointTests, self).setUp()
         self.TEST_ENDPOINTS = {

@@ -14,11 +14,13 @@
 
 import uuid
 
+from testscenarios import load_tests_apply_scenarios as load_tests  # noqa
+
 from keystoneclient.tests.v3 import utils
 from keystoneclient.v3 import domains
 
 
-class DomainTests(utils.TestCase, utils.CrudTests):
+class DomainTests(utils.ClientTestCase, utils.CrudTests):
     def setUp(self):
         super(DomainTests, self).setUp()
         self.key = 'domain'

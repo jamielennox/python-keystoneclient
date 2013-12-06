@@ -81,6 +81,36 @@ class TestCase(testtools.TestCase):
         headers = httpretty.last_request().headers
         self.assertEqual(headers.getheader(name), val)
 
+    def get_client(self, **kwargs):
+        return getattr(self, self.client_method)(**kwargs)
+
+    def get_auth_ref(self, client):
+        if self.isSession:
+            return client.session.auth.auth_ref
+        else:
+            return client.auth_ref
+
+    @property
+    def isSession(self):
+        return self.client_method == '_client_session'
+
+    def skipIfSession(self, reason):
+        if self.isSession:
+            self.skipTest(reason)
+
+    def get_auth_token(self, client):
+        if self.isSession:
+            return client.session.auth.get_token()
+        else:
+            return client.auth_token
+
+    def get_management_url(self, client):
+        if self.isSession:
+            return client.session.auth.get_endpoint(service_type='identity',
+                                                    endpoint_type='adminURL')
+        else:
+            return client.management_url
+
 
 if tuple(sys.version_info)[0:2] < (2, 7):
 

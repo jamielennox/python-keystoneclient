@@ -13,12 +13,13 @@
 #    under the License.
 
 import httpretty
+from testscenarios import load_tests_apply_scenarios as load_tests  # noqa
 
 from keystoneclient.tests.v2_0 import utils
 from keystoneclient.v2_0 import ec2
 
 
-class EC2Tests(utils.TestCase):
+class EC2Tests(utils.ClientTestCase):
 
     @httpretty.activate
     def test_create(self):

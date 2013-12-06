@@ -15,10 +15,12 @@
 from keystoneclient import access
 from keystoneclient.auth.identity import base
 
+from keystoneclient import exceptions
+
 
 class Auth(base.BaseIdentityPlugin):
 
-    def __init__(self, auth_url, token=None, username=None, password=None,
+    def __init__(self, auth_url=None, token=None, username=None, password=None,
                  tenant_id=None, tenant_name=None, trust_id=None):
         super(Auth, self).__init__(auth_url,
                                    token=token,
@@ -41,7 +43,8 @@ class Auth(base.BaseIdentityPlugin):
         trust_id = kwargs.get('trust_id', self.trust_id)
 
         if not auth_url:
-            raise ValueError("Cannot authenticate without a valid auth_url")
+            raise exceptions.AuthorizationFailure("Cannot authenticate without"
+                                                  " a valid auth_url")
 
         url = self.auth_url + "/tokens"
 
@@ -52,7 +55,8 @@ class Auth(base.BaseIdentityPlugin):
             headers['X-Auth-Token'] = token
             params = {"auth": {"token": {"id": token}}}
         else:
-            raise ValueError('A username and password or token is required.')
+            raise exceptions.AuthorizationFailure('A username and password or '
+                                                  'token is required.')
 
         if tenant_id:
             params['auth']['tenantId'] = tenant_id

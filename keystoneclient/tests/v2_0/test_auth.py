@@ -16,11 +16,11 @@ import datetime
 import json
 
 import httpretty
+from testscenarios import load_tests_apply_scenarios as load_tests  # noqa
 
 from keystoneclient import exceptions
 from keystoneclient.openstack.common import timeutils
 from keystoneclient.tests.v2_0 import utils
-from keystoneclient.v2_0 import client
 
 
 class AuthenticateAgainstKeystoneTests(utils.TestCase):
@@ -72,16 +72,16 @@ class AuthenticateAgainstKeystoneTests(utils.TestCase):
         # return expired first, and then the new response
         self.stub_auth(responses=[exp_resp, new_resp])
 
-        cs = client.Client(tenant_id=self.TEST_TENANT_ID,
-                           auth_url=self.TEST_URL,
-                           username=self.TEST_USER,
-                           password=self.TEST_TOKEN)
+        cs = self.get_client(tenant_id=self.TEST_TENANT_ID,
+                             auth_url=self.TEST_URL,
+                             username=self.TEST_USER,
+                             password=self.TEST_TOKEN)
 
-        self.assertEqual(cs.management_url,
+        self.assertEqual(self.get_management_url(cs),
                          self.TEST_RESPONSE_DICT["access"]["serviceCatalog"][3]
                          ['endpoints'][0]["adminURL"])
 
-        self.assertEqual(cs.auth_token, TEST_TOKEN)
+        self.assertEqual(self.get_auth_token(cs), TEST_TOKEN)
         self.assertRequestBodyIs(json=self.TEST_REQUEST_BODY)
 
     @httpretty.activate
@@ -99,10 +99,10 @@ class AuthenticateAgainstKeystoneTests(utils.TestCase):
         # where with assertRaises(exceptions.Unauthorized): doesn't work
         # right
         def client_create_wrapper():
-            client.Client(username=self.TEST_USER,
-                          password="bad_key",
-                          tenant_id=self.TEST_TENANT_ID,
-                          auth_url=self.TEST_URL)
+            self.get_client(username=self.TEST_USER,
+                            password="bad_key",
+                            tenant_id=self.TEST_TENANT_ID,
+                            auth_url=self.TEST_URL)
 
         self.assertRaises(exceptions.Unauthorized, client_create_wrapper)
         self.assertRequestBodyIs(json=self.TEST_REQUEST_BODY)
@@ -115,7 +115,7 @@ class AuthenticateAgainstKeystoneTests(utils.TestCase):
     #     self.stub_auth(base_url=self.TEST_ADMIN_URL,
     #                    json=self.TEST_RESPONSE_DICT)
 
-    #     cs = client.Client(username=self.TEST_USER,
+    #     cs = self.get_client(username=self.TEST_USER,
     #                        password=self.TEST_TOKEN,
     #                        tenant_id=self.TEST_TENANT_ID,
     #                        auth_url=self.TEST_URL)
@@ -131,14 +131,14 @@ class AuthenticateAgainstKeystoneTests(utils.TestCase):
     def test_authenticate_success_password_scoped(self):
         self.stub_auth(json=self.TEST_RESPONSE_DICT)
 
-        cs = client.Client(username=self.TEST_USER,
-                           password=self.TEST_TOKEN,
-                           tenant_id=self.TEST_TENANT_ID,
-                           auth_url=self.TEST_URL)
-        self.assertEqual(cs.management_url,
+        cs = self.get_client(username=self.TEST_USER,
+                             password=self.TEST_TOKEN,
+                             tenant_id=self.TEST_TENANT_ID,
+                             auth_url=self.TEST_URL)
+        self.assertEqual(self.get_management_url(cs),
                          self.TEST_RESPONSE_DICT["access"]["serviceCatalog"][3]
                          ['endpoints'][0]["adminURL"])
-        self.assertEqual(cs.auth_token,
+        self.assertEqual(self.get_auth_token(cs),
                          self.TEST_RESPONSE_DICT["access"]["token"]["id"])
         self.assertRequestBodyIs(json=self.TEST_REQUEST_BODY)
 
@@ -149,12 +149,18 @@ class AuthenticateAgainstKeystoneTests(utils.TestCase):
 
         self.stub_auth(json=self.TEST_RESPONSE_DICT)
 
-        cs = client.Client(username=self.TEST_USER,
-                           password=self.TEST_TOKEN,
-                           auth_url=self.TEST_URL)
-        self.assertEqual(cs.auth_token,
+        cs = self.get_client(username=self.TEST_USER,
+                             password=self.TEST_TOKEN,
+                             auth_url=self.TEST_URL)
+        self.assertEqual(self.get_auth_token(cs),
                          self.TEST_RESPONSE_DICT["access"]["token"]["id"])
-        self.assertFalse('serviceCatalog' in cs.service_catalog.catalog)
+
+        if self.isSession:
+            self.assertNotIn('serviceCatalog',
+                             cs.session.auth.auth_ref.service_catalog.catalog)
+        else:
+            self.assertFalse('serviceCatalog' in cs.service_catalog.catalog)
+
         self.assertRequestBodyIs(json=self.TEST_REQUEST_BODY)
 
     @httpretty.activate
@@ -163,13 +169,13 @@ class AuthenticateAgainstKeystoneTests(utils.TestCase):
         self.TEST_REQUEST_BODY['auth']['token'] = {'id': self.TEST_TOKEN}
         self.stub_auth(json=self.TEST_RESPONSE_DICT)
 
-        cs = client.Client(token=self.TEST_TOKEN,
-                           tenant_id=self.TEST_TENANT_ID,
-                           auth_url=self.TEST_URL)
-        self.assertEqual(cs.management_url,
+        cs = self.get_client(token=self.TEST_TOKEN,
+                             tenant_id=self.TEST_TENANT_ID,
+                             auth_url=self.TEST_URL)
+        self.assertEqual(self.get_management_url(cs),
                          self.TEST_RESPONSE_DICT["access"]["serviceCatalog"][3]
                          ['endpoints'][0]["adminURL"])
-        self.assertEqual(cs.auth_token,
+        self.assertEqual(self.get_auth_token(cs),
                          self.TEST_RESPONSE_DICT["access"]["token"]["id"])
         self.assertRequestBodyIs(json=self.TEST_REQUEST_BODY)
 
@@ -183,12 +189,13 @@ class AuthenticateAgainstKeystoneTests(utils.TestCase):
                                        "id": self.TEST_TRUST_ID}
         self.stub_auth(json=response)
 
-        cs = client.Client(token=self.TEST_TOKEN,
-                           tenant_id=self.TEST_TENANT_ID,
-                           trust_id=self.TEST_TRUST_ID,
-                           auth_url=self.TEST_URL)
-        self.assertTrue(cs.auth_ref.trust_scoped)
-        self.assertEqual(cs.auth_ref.trust_id, self.TEST_TRUST_ID)
+        cs = self.get_client(token=self.TEST_TOKEN,
+                             tenant_id=self.TEST_TENANT_ID,
+                             trust_id=self.TEST_TRUST_ID,
+                             auth_url=self.TEST_URL)
+        auth_ref = self.get_auth_ref(cs)
+        self.assertTrue(auth_ref.trust_scoped)
+        self.assertEqual(auth_ref.trust_id, self.TEST_TRUST_ID)
         self.assertRequestBodyIs(json=self.TEST_REQUEST_BODY)
 
     @httpretty.activate
@@ -200,9 +207,15 @@ class AuthenticateAgainstKeystoneTests(utils.TestCase):
 
         self.stub_auth(json=self.TEST_RESPONSE_DICT)
 
-        cs = client.Client(token=self.TEST_TOKEN,
-                           auth_url=self.TEST_URL)
-        self.assertEqual(cs.auth_token,
+        cs = self.get_client(token=self.TEST_TOKEN,
+                             auth_url=self.TEST_URL)
+        self.assertEqual(self.get_auth_token(cs),
                          self.TEST_RESPONSE_DICT["access"]["token"]["id"])
-        self.assertFalse('serviceCatalog' in cs.service_catalog.catalog)
+
+        if self.isSession:
+            self.assertNotIn('serviceCatalog',
+                             cs.session.auth.auth_ref.service_catalog.catalog)
+        else:
+            self.assertFalse('serviceCatalog' in cs.service_catalog.catalog)
+
         self.assertRequestBodyIs(json=self.TEST_REQUEST_BODY)
