@@ -21,6 +21,15 @@ from keystoneclient.auth import base
 LOG = logging.getLogger(__name__)
 
 
+def _trim_path(url):
+    url_parts = list(urlparse.urlsplit(url))
+    path_parts = filter(None, url_parts[2].split('/'))
+
+    if path_parts:
+        url_parts[2] = '/'.join(path_parts[:-1])
+        return urlparse.urlunsplit(url_parts)
+
+
 @six.add_metaclass(abc.ABCMeta)
 class BaseIdentityPlugin(base.BaseAuthPlugin):
 
@@ -40,6 +49,7 @@ class BaseIdentityPlugin(base.BaseAuthPlugin):
         self.trust_id = trust_id
 
         self.auth_ref = None
+        self._endpoint_cache = {}
 
     @abc.abstractmethod
     def get_auth_ref(self, session):
@@ -53,19 +63,40 @@ class BaseIdentityPlugin(base.BaseAuthPlugin):
         :returns AccessInfo: Token access information.
         """
 
-    def get_token(self, session):
+    def current_auth_ref(self, session):
         if not self.auth_ref or self.auth_ref.will_expire_soon(1):
             self.auth_ref = self.get_auth_ref(session)
 
-        return self.auth_ref.auth_token
+        return self.auth_ref
 
-    def get_endpoint(self, service_type, endpoint_type, **kwargs):
+    def get_token(self, session):
+        return self.current_auth_ref(session).auth_token
+
+    def get_endpoint(self, session, service_type=None, endpoint_type=None,
+                     endpoint_version=None, region_name=None, unstable=False,
+                     **kwargs):
         if not endpoint_type:
             endpoint_type = 'public'
 
-        if not self.auth_ref:
-            raise exceptions.AuthPluginUnauthenticated()
-
-        return self.auth_ref.service_catalog.url_for(
+        url = self.current_auth_ref(session).service_catalog.url_for(
             service_type=service_type,
-            endpoint_type=endpoint_type)
+            endpoint_type=endpoint_type,
+            region_name=region_name)
+
+        endpoint_data = None
+        try:
+            endpoint_data = self._endpoint_cache[url]
+        except KeyError:
+            try:
+                endpoint_data = discover.SimpleDiscover(session, url)
+            except DiscoveryFailure:
+                new_url = _trim_path(url)
+                if new_url:
+                    endpoint_data = discover.SimpleDiscover(session, new_url)
+                    self._endpoint_cache[new_url] = endpoint_data
+
+            self._endpoint_cache[url] = endpoint_data
+
+        data = endpoint_data._get_endpoint_version(version=endpoint_version,
+                                                   unstable=unstable)
+        return data['url']

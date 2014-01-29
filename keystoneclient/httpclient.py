@@ -253,11 +253,8 @@ class HTTPClient(baseclient.Client, base.BaseAuthPlugin):
         if self.auth_token_from_user:
             return self.auth_token_from_user
 
-    def get_endpoint(self, *args, **kwargs):
-        if self._endpoint:
-            return self._endpoint
-
-        return super(HTTPClient, self).get_endpoint(*args, **kwargs)
+    def get_endpoint(self, session, **kwargs):
+        return self.management_url
 
     @auth_token.setter
     def auth_token(self, value):

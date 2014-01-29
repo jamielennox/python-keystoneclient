@@ -12,8 +12,9 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+import urlparse
+
 import logging
-import six
 
 from keystoneclient import exceptions
 from keystoneclient import session as client_session
@@ -153,6 +154,13 @@ def available_versions(url, session=None, **kwargs):
         except (KeyError, TypeError):
             pass
 
+        # Most servers don't have a 'values' element so accept straight the
+        # base versions dict if available.
+        try:
+            return body_resp['versions']
+        except KeyError:
+            pass
+
         # Otherwise if we query an endpoint like /v2.0 then we will get back
         # just the one available version.
         try:
@@ -164,7 +172,123 @@ def available_versions(url, session=None, **kwargs):
                                       " data returned: %s" % resp.text)
 
 
-class Discover(object):
+def trim_path(url):
+    url_parts = list(urlparse.urlsplit(url))
+    path_parts = filter(None, url_parts[2].split('/'))
+
+    if path_parts:
+        url_parts[2] = '/'.join(path_parts[:-1])
+        return urlparse.urlunsplit(url_parts)
+
+
+class SimpleDiscover(object):
+
+    def __init__(self, session, url):
+        self._available_versions = available_versions(url, session=session)
+
+    def available_versions(self, unstable=False):
+        """Return a list of identity APIs available on the server and the data
+        associated with them.
+
+        :param bool unstable: Accept endpoints not marked 'stable'. (optional)
+
+        :returns: A List of dictionaries as presented by the server. Each dict
+                  will contain the version and the URL to use for the version.
+                  It is a direct representation of the layout presented by the
+                  identity API.
+
+        Example::
+
+            >>> from keystoneclient import discover
+            >>> disc = discover.Discovery(auth_url='http://localhost:5000')
+            >>> disc.available_versions()
+                [{'id': 'v3.0',
+                    'links': [{'href': u'http://127.0.0.1:5000/v3/',
+                               'rel': u'self'}],
+                  'media-types': [
+                      {'base': 'application/json',
+                       'type': 'application/vnd.openstack.identity-v3+json'},
+                      {'base': 'application/xml',
+                       'type': 'application/vnd.openstack.identity-v3+xml'}],
+                  'status': 'stable',
+                  'updated': '2013-03-06T00:00:00Z'},
+                 {'id': 'v2.0',
+                  'links': [{'href': u'http://127.0.0.1:5000/v2.0/',
+                             'rel': u'self'},
+                            {'href': u'...',
+                             'rel': u'describedby',
+                             'type': u'application/pdf'}],
+                  'media-types': [
+                      {'base': 'application/json',
+                       'type': 'application/vnd.openstack.identity-v2.0+json'},
+                      {'base': 'application/xml',
+                       'type': 'application/vnd.openstack.identity-v2.0+xml'}],
+                  'status': 'stable',
+                  'updated': '2013-03-06T00:00:00Z'}]
+        """
+        if unstable:
+            # no need to determine the stable endpoints, just return everything
+            return self._available_versions
+
+        versions = []
+
+        for v in self._available_versions:
+            try:
+                status = v['status']
+            except KeyError:
+                _logger.warning("Skipping over invalid version data. "
+                                "No stability status in version.")
+            else:
+                if status.lower() in ('stable', 'current'):
+                    versions.append(v)
+
+        return versions
+
+    def _get_individual_endpoint_url(self, version_data):
+        try:
+            version_str = version_data['id']
+            status = version_data['status']
+
+            if not version_str.startswith('v'):
+                raise exceptions.DiscoveryFailure('Skipping over invalid '
+                                                  'version string: %s. It '
+                                                  'should start with a v.' %
+                                                  version_str)
+
+            for link in version_data['links']:
+                # NOTE(jamielennox): there are plenty of links like with
+                # documentation and such, we only care about the self
+                # which is a link to the URL we should use.
+                if link['rel'].lower() == 'self':
+                    version = _normalize_version_number(version_str)
+                    url = link['href']
+                    break
+            else:
+                raise exceptions.DiscoveryFailure("Didn't find any links "
+                                                  "in version data.")
+
+        except (KeyError, TypeError, ValueError):
+            raise exceptions.DiscoveryFailure('Skipping over invalid '
+                                              'version data.')
+
+        return {'version': version, 'status': status, 'url': url}
+
+    def _get_endpoint_urls(self, unstable=False):
+        versions = []
+        response_values = self.available_versions(unstable=unstable)
+
+        for version_data in response_values:
+            try:
+                v = self._get_individual_endpoint_url(version_data)
+            except exceptions.DiscoveryFailure as e:
+                _logger.warning("Invalid entry: %s", e, exc_info=True)
+            else:
+                versions.append(v)
+
+        return versions
+
+
+class Discover(SimpleDiscover):
     """A means to discover and create clients depending on the supported API
     versions on the server.
 
@@ -239,7 +363,7 @@ class Discover(object):
                                               'auth_url or endpoint')
 
         self._client_kwargs = kwargs
-        self._available_versions = available_versions(url, session=session)
+        super(Discover, self).__init__(session, url)
 
     def _get_client_constructor_kwargs(self, kwargs_dict={}, **kwargs):
         client_kwargs = self._client_kwargs.copy()
@@ -249,105 +373,21 @@ class Discover(object):
 
         return client_kwargs
 
-    def available_versions(self, unstable=False):
-        """Return a list of identity APIs available on the server and the data
-        associated with them.
-
-        :param bool unstable: Accept endpoints not marked 'stable'. (optional)
-
-        :returns: A List of dictionaries as presented by the server. Each dict
-                  will contain the version and the URL to use for the version.
-                  It is a direct representation of the layout presented by the
-                  identity API.
-
-        Example::
-
-            >>> from keystoneclient import discover
-            >>> disc = discover.Discovery(auth_url='http://localhost:5000')
-            >>> disc.available_versions()
-                [{'id': 'v3.0',
-                    'links': [{'href': u'http://127.0.0.1:5000/v3/',
-                               'rel': u'self'}],
-                  'media-types': [
-                      {'base': 'application/json',
-                       'type': 'application/vnd.openstack.identity-v3+json'},
-                      {'base': 'application/xml',
-                       'type': 'application/vnd.openstack.identity-v3+xml'}],
-                  'status': 'stable',
-                  'updated': '2013-03-06T00:00:00Z'},
-                 {'id': 'v2.0',
-                  'links': [{'href': u'http://127.0.0.1:5000/v2.0/',
-                             'rel': u'self'},
-                            {'href': u'...',
-                             'rel': u'describedby',
-                             'type': u'application/pdf'}],
-                  'media-types': [
-                      {'base': 'application/json',
-                       'type': 'application/vnd.openstack.identity-v2.0+json'},
-                      {'base': 'application/xml',
-                       'type': 'application/vnd.openstack.identity-v2.0+xml'}],
-                  'status': 'stable',
-                  'updated': '2013-03-06T00:00:00Z'}]
-        """
-        if unstable:
-            # no need to determine the stable endpoints, just return everything
-            return self._available_versions
-
-        versions = []
-
-        for v in self._available_versions:
-            try:
-                status = v['status']
-            except KeyError:
-                _logger.warning("Skipping over invalid version data. "
-                                "No stability status in version.")
-            else:
-                if status == 'stable':
-                    versions.append(v)
-
-        return versions
-
     def _get_factory_from_response_entry(self, version_data, **kwargs):
         """Create a _KeystoneVersion factory object from a version response
         entry returned from a server.
         """
-        try:
-            version_str = version_data['id']
-            status = version_data['status']
-
-            if not version_str.startswith('v'):
-                raise exceptions.DiscoveryFailure('Skipping over invalid '
-                                                  'version string: %s. It '
-                                                  'should start with a v.' %
-                                                  version_str)
-
-            for link in version_data['links']:
-                # NOTE(jamielennox): there are plenty of links like with
-                # documentation and such, we only care about the self
-                # which is a link to the URL we should use.
-                if link['rel'].lower() == 'self':
-                    version_number = _normalize_version_number(version_str)
-                    version_url = link['href']
-                    break
-            else:
-                raise exceptions.DiscoveryFailure("Didn't find any links "
-                                                  "in version data.")
-
-        except (KeyError, TypeError, ValueError):
-            raise exceptions.DiscoveryFailure('Skipping over invalid '
-                                              'version data.')
-
         # NOTE(jamielennox): the url might be the auth_url or the endpoint
         # depending on what was passed initially. Order is important, endpoint
         # needs to override auth_url.
         for url_type in ('auth_url', 'endpoint'):
             if self._client_kwargs.get(url_type, False):
-                kwargs[url_type] = version_url
+                kwargs[url_type] = version_data['url']
             else:
                 kwargs[url_type] = None
 
-        return _KeystoneVersion(status=status,
-                                version=version_number,
+        return _KeystoneVersion(status=version_data['status'],
+                                version=version_data['version'],
                                 **kwargs)
 
     def _available_clients(self, unstable=False, **kwargs):
@@ -379,21 +419,57 @@ class Discover(object):
         """
 
         versions = dict()
-        response_values = self.available_versions(unstable=unstable)
+        response_values = self._get_endpoint_urls(unstable=unstable)
         client_kwargs = self._get_client_constructor_kwargs(kwargs_dict=kwargs)
 
         for version_data in response_values:
-            try:
-                v = self._get_factory_from_response_entry(version_data,
-                                                          **client_kwargs)
-            except exceptions.DiscoveryFailure as e:
-                _logger.warning("Invalid entry: %s", e, exc_info=True)
-            else:
-                versions[v.version] = v
+            v = self._get_factory_from_response_entry(version_data,
+                                                      **client_kwargs)
+            versions[v.version] = v
 
         return versions
 
-    def create_client(self, version=None, **kwargs):
+    def _get_endpoint_version(self, version=None, unstable=False):
+        versions = self._get_endpoint_urls(unstable=unstable)
+        chosen = None
+
+        if version:
+            version = _normalize_version_number(version)
+
+            for keystone_version in versions:
+                # major versions must be the same (eg even though v2 is a lower
+                # version than v3 we can't use it if v2 was requested)
+                if version[0] != keystone_version['version'][0]:
+                    continue
+
+                # prevent selecting a minor version less than what is required
+                if version <= keystone_version['version']:
+                    chosen = keystone_version
+                    break
+
+        elif versions:
+            # if no version specified pick the latest one
+            chosen = max(versions, key=lambda x: x['version'])
+
+        if not chosen:
+            msg = "Could not find a suitable endpoint"
+
+            if version:
+                msg = "%s for client version: %s" % (msg, version)
+
+            if versions:
+                version_strs = [".".join([str(v) for v in x['version']])
+                                for x in versions]
+                available = ", ".join(version_strs)
+                msg = "%s. Available_versions are: %s" % (msg, available)
+            else:
+                msg = "%s. No versions reported available" % msg
+
+            raise exceptions.VersionNotAvailable(msg)
+
+        return chosen
+
+    def create_client(self, version=None, unstable=False, **kwargs):
         """Factory function to create a new identity service client.
 
         :param tuple version: The required version of the identity API. If
@@ -411,40 +487,10 @@ class Discover(object):
         :raises: DiscoveryFailure if the server response is invalid
         :raises: VersionNotAvailable if a suitable client cannot be found.
         """
-        versions = self._available_clients(**kwargs)
-        chosen = None
-
-        if version:
-            version = _normalize_version_number(version)
-
-            for keystone_version in six.itervalues(versions):
-                # major versions must be the same (eg even though v2 is a lower
-                # version than v3 we can't use it if v2 was requested)
-                if version[0] != keystone_version.version[0]:
-                    continue
-
-                # prevent selecting a minor version less than what is required
-                if version <= keystone_version.version:
-                    chosen = keystone_version
-                    break
-
-        elif versions:
-            # if no version specified pick the latest one
-            chosen = max(six.iteritems(versions))[1]
-
-        if not chosen:
-            msg = "Could not find a suitable endpoint"
-
-            if version:
-                msg = "%s for client version: %s" % (msg, version)
-
-            if versions:
-                available = ", ".join([v._str_ver
-                                       for v in six.itervalues(versions)])
-                msg = "%s. Available_versions are: %s" % (msg, available)
-            else:
-                msg = "%s. No versions reported available" % msg
-
-            raise exceptions.VersionNotAvailable(msg)
+        client_kwargs = self._get_client_constructor_kwargs(kwargs_dict=kwargs)
+        version_data = self._get_endpoint_version(version=version,
+                                                  unstable=unstable)
+        chosen = self._get_factory_from_response_entry(version_data,
+                                                       **client_kwargs)
 
         return chosen.create_client()

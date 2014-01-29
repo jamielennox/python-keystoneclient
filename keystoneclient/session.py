@@ -92,8 +92,8 @@ class Session(object):
 
     def request(self, url, method, json=None, original_ip=None,
                 user_agent=None, redirect=None, authenticated=None,
-                service_type=None, endpoint_type=None,
-                **kwargs):
+                service_type=None, endpoint_type=None, endpoint_version=None,
+                unstable=False, **kwargs):
         """Send an HTTP request with the specified characteristics.
 
         Wrapper around `requests.Session.request` to handle tasks such as
@@ -151,12 +151,10 @@ class Session(object):
             headers['X-Auth-Token'] = token
 
         if service_type:
-            if not self.auth:
-                raise exceptions.MissingAuthPlugin("Service Catalog Required")
-
-            base_url = self.auth.get_endpoint(session=self,
-                                              service_type=service_type,
-                                              endpoint_type=endpoint_type)
+            base_url = self.get_endpoint(service_type=service_type,
+                                         endpoint_type=endpoint_type,
+                                         endpoint_version=endpoint_version,
+                                         unstable=unstable)
 
             if not base_url:
                 raise exceptions.EndpointNotFound()
@@ -333,3 +331,9 @@ class Session(object):
             raise exceptions.MissingAuthPlugin("Token Required")
 
         return self.auth.get_token(self)
+
+    def get_endpoint(self, **kwargs):
+        if not self.auth:
+            raise exceptions.MissingAuthPlugin("Service Catalog Required")
+
+        return self.auth.get_endpoint(self, **kwargs)

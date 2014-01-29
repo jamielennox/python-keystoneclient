@@ -269,6 +269,9 @@ class AuthPlugin(base.BaseAuthPlugin):
     def get_token(self, session):
         return self.token
 
+    def get_endpoint(self, session, **kwargs):
+        return None
+
 
 class SessionAuthTests(utils.TestCase):
 

@@ -31,7 +31,7 @@ class BaseAuthPlugin(object):
 
     @abc.abstractmethod
     def get_endpoint(self, session, service_type=None,
-                     endpoint_type=None, **kwargs):
+                     endpoint_type=None, endpoint_version=None, **kwargs):
         """Return an endpoint for the client.
 
         The endpoint should reflect the type of service required, whether it
@@ -43,4 +43,6 @@ class BaseAuthPlugin(object):
                                     (optional)
         :param string endpoint_type: The endpoint type to query a URL for.
                                      (optional)
+        :param tuple version: Required version for endpoint. If not provided
+                              most recent version is returned. (optional)
         """
