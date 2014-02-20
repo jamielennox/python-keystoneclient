@@ -366,13 +366,15 @@ class Session(object):
         """Handles constructing a session from the older HTTPClient args as
         well as the new request style arguments.
 
-        *DEPRECATED*: This function is purely for bridging the gap between
-        older client arguments and the session arguments that they relate to.
-        It is not intended to be used as a generic Session Factory.
+        This function is purely for bridging the gap between older client
+        arguments and the session arguments that they relate to.  It is not
+        intended to be used as a generic Session Factory. If you are not
+        loading from an existing client or CLI then you should create the
+        session in the normal manner.
 
         This function purposefully modifies the input kwargs dictionary so that
         the remaining kwargs dict can be reused and passed on to other
-        functionswithout session arguments.
+        functions without session arguments.
 
         """
         params = {}
