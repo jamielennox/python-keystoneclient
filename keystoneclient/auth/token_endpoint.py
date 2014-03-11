@@ -12,6 +12,7 @@
 
 
 from keystoneclient.auth import base
+from keystoneclient.auth import param
 
 
 class Token(base.BaseAuthPlugin):
@@ -29,3 +30,11 @@ class Token(base.BaseAuthPlugin):
 
     def get_token(self, session):
         return self.token
+
+    def get_params(self):
+        return [
+            param.Params('endpoint',
+                         description='The endpoint that will always be used'),
+            param.Params('token',
+                         description='The token that will always be used'),
+        ]
