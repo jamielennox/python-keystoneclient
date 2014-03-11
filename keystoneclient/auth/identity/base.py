@@ -15,6 +15,7 @@ import logging
 import six
 
 from keystoneclient.auth import base
+from keystoneclient.auth import param
 
 LOG = logging.getLogger(__name__)
 
@@ -128,3 +129,13 @@ class BaseIdentityPlugin(base.BaseAuthPlugin):
     def invalidate(self):
         self.auth_ref = None
         return True
+
+    @classmethod
+    def get_params(cls):
+        params = super(BaseIdentityPlugin, cls).get_params()
+
+        params.extend([
+            param.Param('auth_url', description='Authentication URL'),
+        ])
+
+        return params

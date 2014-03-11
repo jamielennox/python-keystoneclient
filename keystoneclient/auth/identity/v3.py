@@ -17,6 +17,7 @@ import six
 
 from keystoneclient import access
 from keystoneclient.auth.identity import base
+from keystoneclient.auth import param
 from keystoneclient import exceptions
 from keystoneclient import utils
 
@@ -142,6 +143,25 @@ class Auth(base.BaseIdentityPlugin):
 
         return Auth(auth_url, methods, **kwargs)
 
+    @classmethod
+    def get_params(cls):
+        params = super(Auth, cls).get_params()
+
+        params.extend([
+            param.Param('domain_id', description='Domain ID to scope to'),
+            param.Param('domain_name', description='Domain name to scope to'),
+            param.Param('project_id', description='Project ID to scope to'),
+            param.Param('project_name',
+                        description='Project name to scope to'),
+            param.Param('project_domain_id',
+                        description='Domain ID containing project'),
+            param.Param('project_domain_name',
+                        description='Domain name containing project'),
+            param.Param('trust_id', description='Trust ID'),
+        ])
+
+        return params
+
 
 @six.add_metaclass(abc.ABCMeta)
 class AuthMethod(object):
@@ -239,7 +259,22 @@ class PasswordMethod(AuthMethod):
 
 
 class Password(_AuthConstructor):
+
     _auth_method_class = PasswordMethod
+
+    @classmethod
+    def get_params(cls):
+        params = super(Password, cls).get_params()
+
+        params.extend([
+            param.Param('user_id', description='User ID'),
+            param.Param('username', name='user_name', description='Username'),
+            param.Param('user_domain_id', description="User's domain id"),
+            param.Param('user_domain_name', description="User's domain name"),
+            param.Param('password', description="User's password"),
+        ])
+
+        return params
 
 
 class TokenMethod(AuthMethod):
@@ -259,7 +294,19 @@ class TokenMethod(AuthMethod):
 
 
 class Token(_AuthConstructor):
+
     _auth_method_class = TokenMethod
 
     def __init__(self, auth_url, token, **kwargs):
         super(Token, self).__init__(auth_url, token=token, **kwargs)
+
+    @classmethod
+    def get_params(cls):
+        params = super(Token, cls).get_params()
+
+        params.extend([
+            param.Param('token',
+                        description='Token to authenticate with'),
+        ])
+
+        return params

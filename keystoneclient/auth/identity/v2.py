@@ -16,6 +16,7 @@ import six
 
 from keystoneclient import access
 from keystoneclient.auth.identity import base
+from keystoneclient.auth import param
 from keystoneclient import exceptions
 from keystoneclient import utils
 
@@ -49,6 +50,18 @@ class Auth(base.BaseIdentityPlugin):
 
         msg = 'A username and password or token is required.'
         raise exceptions.NoMatchingPlugin(msg)
+
+    @classmethod
+    def get_params(cls):
+        params = super(Auth, cls).get_params()
+
+        params.extend([
+            param.Param('tenant_id', description='Tenant ID'),
+            param.Param('tenant_name', description='Tenant Name'),
+            param.Param('trust_id', description='Trust ID'),
+        ])
+
+        return params
 
     @utils.positional()
     def __init__(self, auth_url,
@@ -117,6 +130,17 @@ class Password(Auth):
         return {'passwordCredentials': {'username': self.username,
                                         'password': self.password}}
 
+    @classmethod
+    def get_params(cls):
+        params = super(Password, cls).get_params()
+
+        params.extend([
+            param.Param('username', description='Username to login with'),
+            param.Param('password', description='Password to use'),
+        ])
+
+        return params
+
 
 class Token(Auth):
 
@@ -133,3 +157,13 @@ class Token(Auth):
         if headers is not None:
             headers['X-Auth-Token'] = self.token
         return {'token': {'id': self.token}}
+
+    @classmethod
+    def get_params(cls):
+        params = super(Token, cls).get_params()
+
+        params.extend([
+            param.Param('token', description='Token'),
+        ])
+
+        return params
