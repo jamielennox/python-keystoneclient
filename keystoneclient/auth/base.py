@@ -11,6 +11,7 @@
 # under the License.
 
 import abc
+
 import six
 
 
@@ -53,3 +54,14 @@ class BaseAuthPlugin(object):
         :returns string: The base URL that will be used to talk to the
                          required service or None if not available.
         """
+
+    @classmethod
+    def get_params(cls):
+        """Return the list of parameters associated with the auth plugin.
+
+        This list may be used to generate CLI or config arguments.
+
+        :returns list: A list of Param objects describing available plugin
+                       parameters.
+        """
+        return []

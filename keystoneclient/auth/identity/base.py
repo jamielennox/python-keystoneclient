@@ -15,6 +15,7 @@ import logging
 import six
 
 from keystoneclient.auth import base
+from keystoneclient.auth import param
 
 LOG = logging.getLogger(__name__)
 
@@ -124,3 +125,13 @@ class BaseIdentityPlugin(base.BaseAuthPlugin):
         return service_catalog.url_for(service_type=service_type,
                                        endpoint_type=interface,
                                        region_name=region_name)
+
+    @classmethod
+    def get_params(cls):
+        params = super(BaseIdentityPlugin, cls).get_params()
+
+        params.extend([
+            param.Param('auth_url', description='Authentication URL'),
+        ])
+
+        return params
