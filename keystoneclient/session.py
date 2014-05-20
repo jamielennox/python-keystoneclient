@@ -20,6 +20,10 @@ from keystoneclient import exceptions
 from keystoneclient.openstack.common import jsonutils
 from keystoneclient import utils
 
+try:
+    from oslo.config import cfg
+except ImportError:
+    cfg = None
 
 USER_AGENT = 'python-keystoneclient'
 
@@ -355,12 +359,26 @@ class Session(object):
         functionswithout session arguments.
 
         """
-        verify = kwargs.pop('verify', None)
-        cacert = kwargs.pop('cacert', None)
-        cert = kwargs.pop('cert', None)
-        key = kwargs.pop('key', None)
-        insecure = kwargs.pop('insecure', False)
+        params = {}
 
+        for attr in ('verify', 'cacert', 'cert', 'key', 'insecure',
+                     'timeout', 'session', 'original_ip', 'user_agent'):
+            try:
+                params[attr] = kwargs.pop(attr)
+            except KeyError:
+                pass
+
+        return cls._make(**params)
+
+    @classmethod
+    def _make(cls, insecure=False, verify=None, cacert=None, cert=None,
+              key=None, **kwargs):
+        """Create a session with individual certificate parameters.
+
+        Some parameters used to create a session don't lend themselves to be
+        loading from config/CLI etc. Create a session by converting those
+        parameters into session __init__ parameters.
+        """
         if verify is None:
             if insecure:
                 verify = False
@@ -372,11 +390,7 @@ class Session(object):
             # requests lib form of having the cert and key as a tuple
             cert = (cert, key)
 
-        return cls(verify=verify, cert=cert,
-                   timeout=kwargs.pop('timeout', None),
-                   session=kwargs.pop('session', None),
-                   original_ip=kwargs.pop('original_ip', None),
-                   user_agent=kwargs.pop('user_agent', None))
+        return cls(verify=verify, cert=cert, **kwargs)
 
     def get_token(self, auth=None):
         """Return a token as provided by the auth plugin.
@@ -432,3 +446,57 @@ class Session(object):
             raise exceptions.MissingAuthPlugin(msg)
 
         return auth.invalidate()
+
+    @classmethod
+    @utils.positional()
+    def register_conf_options(cls, conf, group, deprecated_opts={}):
+        """Register the oslo.config options that are needed for a session.
+
+        :param oslo.config.Cfg conf: config object to register with.
+        :param string group: The ini group to register options in.
+
+        :returns: The group object that was registered.
+        """
+        if not cfg:
+            raise ImportError('oslo.config is not available')
+
+        opts = [cfg.StrOpt('cafile',
+                           deprecated_opts=deprecated_opts.get('cafile'),
+                           help='PEM encoded Certificate Authority to use '
+                                'when verifying HTTPs connections.'),
+                cfg.StrOpt('certfile',
+                           deprecated_opts=deprecated_opts.get('certfile'),
+                           help='PEM encoded client certificate cert file'),
+                cfg.StrOpt('keyfile',
+                           deprecated_opts=deprecated_opts.get('keyfile'),
+                           help='PEM encoded client certificate key file'),
+                cfg.BoolOpt('insecure',
+                            default=False,
+                            deprecated_opts=deprecated_opts.get('insecure'),
+                            help='Verify HTTPS connections.'),
+                cfg.IntOpt('timeout',
+                           deprecated_opts=deprecated_opts.get('timeout'),
+                           help='Timeout value for http requests'),
+                ]
+
+        conf.register_group(cfg.OptGroup(group))
+        conf.register_opts(opts, group=group)
+
+    @classmethod
+    def load_from_conf_options(cls, conf, group, **kwargs):
+        """Create a session object from an oslo.config object.
+
+        As oslo.config options can be registered multiple times this function
+        will also handle registering the options.
+
+        :returns: A new session object.
+        """
+        c = conf[group]
+
+        kwargs['insecure'] = c.insecure
+        kwargs['cacert'] = c.cafile
+        kwargs['cert'] = c.certfile
+        kwargs['key'] = c.keyfile
+        kwargs['timeout'] = c.timeout
+
+        return cls._make(**kwargs)
