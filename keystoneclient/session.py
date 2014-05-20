@@ -10,7 +10,9 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+import argparse
 import logging
+import os
 
 import requests
 import six
@@ -20,10 +22,28 @@ from keystoneclient import exceptions
 from keystoneclient.openstack.common import jsonutils
 from keystoneclient import utils
 
+try:
+    from oslo.config import cfg
+except ImportError:
+    cfg = None
 
 USER_AGENT = 'python-keystoneclient'
 
 _logger = logging.getLogger(__name__)
+
+
+def _positive_non_zero_float(argument_value):
+    if argument_value is None:
+        return None
+    try:
+        value = float(argument_value)
+    except ValueError:
+        msg = "%s must be a float" % argument_value
+        raise argparse.ArgumentTypeError(msg)
+    if value <= 0:
+        msg = "%s must be greater than 0" % argument_value
+        raise argparse.ArgumentTypeError(msg)
+    return value
 
 
 def request(url, method='GET', **kwargs):
@@ -355,12 +375,26 @@ class Session(object):
         functionswithout session arguments.
 
         """
-        verify = kwargs.pop('verify', None)
-        cacert = kwargs.pop('cacert', None)
-        cert = kwargs.pop('cert', None)
-        key = kwargs.pop('key', None)
-        insecure = kwargs.pop('insecure', False)
+        params = {}
 
+        for attr in ('verify', 'cacert', 'cert', 'key', 'insecure',
+                     'timeout', 'session', 'original_ip', 'user_agent'):
+            try:
+                params[attr] = kwargs.pop(attr)
+            except KeyError:
+                pass
+
+        return cls._make(**params)
+
+    @classmethod
+    def _make(cls, insecure=False, verify=None, cacert=None, cert=None,
+              key=None, **kwargs):
+        """Create a session with individual certificate parameters.
+
+        Some parameters used to create a session don't lend themselves to be
+        loading from config/CLI etc. Create a session by converting those
+        parameters into session __init__ parameters.
+        """
         if verify is None:
             if insecure:
                 verify = False
@@ -372,11 +406,7 @@ class Session(object):
             # requests lib form of having the cert and key as a tuple
             cert = (cert, key)
 
-        return cls(verify=verify, cert=cert,
-                   timeout=kwargs.pop('timeout', None),
-                   session=kwargs.pop('session', None),
-                   original_ip=kwargs.pop('original_ip', None),
-                   user_agent=kwargs.pop('user_agent', None))
+        return cls(verify=verify, cert=cert, **kwargs)
 
     def get_token(self, auth=None):
         """Return a token as provided by the auth plugin.
@@ -432,3 +462,115 @@ class Session(object):
             raise exceptions.MissingAuthPlugin(msg)
 
         return auth.invalidate()
+
+    @classmethod
+    def register_conf_options(cls, conf, group):
+        """Register the oslo.config options that are needed for a session.
+
+        :param oslo.config.Cfg conf: config object to register with.
+        :param string group: The ini group to register options in.
+
+        :returns: The group object that was registered.
+        """
+        if not cfg:
+            raise ImportError('oslo.config is not available')
+
+        opts = [cfg.StrOpt('cafile',
+                           help='PEM encoded Certificate Authority to use '
+                                'when verifying HTTPs connections.'),
+                cfg.StrOpt('certfile',
+                           help='PEM encoded client certificate cert file'),
+                cfg.StrOpt('keyfile',
+                           help='PEM encoded client certificate key file'),
+                cfg.BoolOpt('insecure',
+                            default=False,
+                            help='Verify HTTPS connections.'),
+                cfg.IntOpt('timeout',
+                           help='Timeout value for http requests'),
+                ]
+
+        conf.register_group(cfg.OptGroup(group))
+        conf.register_opts(opts, group=group)
+
+        return conf[group]
+
+    @classmethod
+    def load_from_conf_options(cls, conf, group, **kwargs):
+        """Create a session object from an oslo.config object.
+
+        As oslo.config options can be registered multiple times this function
+        will also handle registering the options.
+
+        :returns: A new session object.
+        """
+        c = cls.register_conf_options(conf, group)
+
+        kwargs['insecure'] = c.insecure
+        kwargs['cacert'] = c.cafile
+        kwargs['cert'] = c.certfile
+        kwargs['key'] = c.keyfile
+        kwargs['timeout'] = c.timeout
+
+        return cls._make(**kwargs)
+
+    @staticmethod
+    def register_cli_options(parser):
+        """Register the argparse arguments that are needed for a session.
+
+        :param argparse.ArgumentParser parser: parser to add to.
+        """
+        parser.add_argument('--insecure',
+                            default=False,
+                            action='store_true',
+                            help='Explicitly allow client to perform '
+                                 '"insecure" TLS (https) requests. The '
+                                 'server\'s certificate will not be verified '
+                                 'against any certificate authorities. This '
+                                 'option should be used with caution.')
+
+        parser.add_argument('--os-cacert',
+                            metavar='<ca-certificate>',
+                            default=os.environ.get('OS_CACERT'),
+                            help='Specify a CA bundle file to use in '
+                                 'verifying a TLS (https) server certificate. '
+                                 'Defaults to env[OS_CACERT].')
+        parser.add_argument('--os_cacert',
+                            help=argparse.SUPPRESS)
+
+        parser.add_argument('--os-cert',
+                            metavar='<certificate>',
+                            default=os.environ.get('OS_CERT'),
+                            help='Defaults to env[OS_CERT].')
+        parser.add_argument('--os_cert',
+                            help=argparse.SUPPRESS)
+
+        parser.add_argument('--os-key',
+                            metavar='<key>',
+                            default=os.environ.get('OS_KEY'),
+                            help='Defaults to env[OS_KEY].')
+        parser.add_argument('--os_key',
+                            help=argparse.SUPPRESS)
+
+        parser.add_argument('--timeout',
+                            default=600,
+                            type=_positive_non_zero_float,
+                            metavar='<seconds>',
+                            help='Set request timeout (in seconds).')
+
+    @classmethod
+    def load_from_cli_options(cls, args, **kwargs):
+        """Create a session object from CLI arguments.
+
+        The CLI arguments must have been registered with register_cli_options.
+
+        :param Namespace args: result of parsed arguments.
+
+        :returns: A new session object.
+        """
+        kwargs['insecure'] = args.insecure
+        kwargs['cacert'] = args.os_cacert
+        kwargs['cert'] = args.os_cert
+        kwargs['key'] = args.os_key
+        kwargs['timeout'] = args.timeout
+
+        return cls._make(**kwargs)

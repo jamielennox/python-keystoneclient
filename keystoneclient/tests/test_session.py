@@ -10,6 +10,7 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+import argparse
 
 import httpretty
 import mock
@@ -18,6 +19,7 @@ import six
 
 from keystoneclient.auth import base
 from keystoneclient import exceptions
+from keystoneclient.openstack.common.fixture import config
 from keystoneclient import session as client_session
 from keystoneclient.tests import utils
 
@@ -506,3 +508,85 @@ class SessionAuthTests(utils.TestCase):
         self.assertRaises(exceptions.Unauthorized, sess.get, self.TEST_URL,
                           authenticated=True, allow_reauth=False)
         self.assertFalse(auth.invalidate_called)
+
+
+class CliLoadingTests(utils.TestCase):
+
+    def setUp(self):
+        super(CliLoadingTests, self).setUp()
+
+        self.parser = argparse.ArgumentParser()
+        client_session.Session.register_cli_options(self.parser)
+
+    def get_session(self, val, **kwargs):
+        args = self.parser.parse_args(val.split())
+        return client_session.Session.load_from_cli_options(args, **kwargs)
+
+    def test_insecure_timeout(self):
+        s = self.get_session('--insecure --timeout 5')
+
+        self.assertFalse(s.verify)
+        self.assertEqual(5, s.timeout)
+
+    def test_client_certs(self):
+        cert = '/path/to/certfile'
+        key = '/path/to/keyfile'
+
+        s = self.get_session('--os-cert %s --os-key %s' % (cert, key))
+
+        self.assertTrue(s.verify)
+        self.assertEqual((cert, key), s.cert)
+
+    def test_cacert(self):
+        cacert = '/path/to/cacert'
+
+        s = self.get_session('--os-cacert %s' % cacert)
+
+        self.assertEqual(cacert, s.verify)
+
+
+class ConfLoadingTests(utils.TestCase):
+
+    GROUP = 'sessiongroup'
+
+    def setUp(self):
+        super(ConfLoadingTests, self).setUp()
+
+        self.conf_fixture = self.useFixture(config.Config())
+        client_session.Session.register_conf_options(self.conf_fixture.conf,
+                                                     self.GROUP)
+
+    def config(self, **kwargs):
+        kwargs['group'] = self.GROUP
+        self.conf_fixture.config(**kwargs)
+
+    def get_session(self, **kwargs):
+        return client_session.Session.load_from_conf_options(
+            self.conf_fixture.conf,
+            self.GROUP,
+            **kwargs)
+
+    def test_insecure_timeout(self):
+        self.config(insecure=True, timeout=5)
+        s = self.get_session()
+
+        self.assertFalse(s.verify)
+        self.assertEqual(5, s.timeout)
+
+    def test_client_certs(self):
+        cert = '/path/to/certfile'
+        key = '/path/to/keyfile'
+
+        self.config(certfile=cert, keyfile=key)
+        s = self.get_session()
+
+        self.assertTrue(s.verify)
+        self.assertEqual((cert, key), s.cert)
+
+    def test_cacert(self):
+        cafile = '/path/to/cacert'
+
+        self.config(cafile=cafile)
+        s = self.get_session()
+
+        self.assertEqual(cafile, s.verify)
