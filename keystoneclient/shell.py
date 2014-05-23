@@ -34,6 +34,7 @@ import six
 
 import keystoneclient
 from keystoneclient import access
+from keystoneclient.auth import cli
 from keystoneclient.contrib.bootstrap import shell as shell_bootstrap
 from keystoneclient import exceptions as exc
 from keystoneclient.generic import shell as shell_generic
@@ -82,7 +83,7 @@ class OpenStackIdentityShell(object):
             epilog='See "keystone help COMMAND" '
                    'for help on a specific command.',
             add_help=False,
-            formatter_class=OpenStackHelpFormatter,
+            formatter_class=OpenStackHelpFormatter
         )
 
         # Global arguments
@@ -363,6 +364,7 @@ class OpenStackIdentityShell(object):
         # build available subcommands based on version
         api_version = options.os_identity_api_version
         subcommand_parser = self.get_subcommand_parser(api_version)
+        cli.register_cli_options(subcommand_parser, argv)
         self.parser = subcommand_parser
 
         # Handle top-level --help/-h before attempting to parse
@@ -403,7 +405,7 @@ class OpenStackIdentityShell(object):
                                                  insecure=args.insecure,
                                                  timeout=args.timeout)
         else:
-            self.auth_check(args)
+            auth = cli.plugin_from_cli(args)
             token = None
             if args.os_token and args.os_endpoint:
                 token = args.os_token
