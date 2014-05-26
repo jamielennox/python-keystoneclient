@@ -411,8 +411,11 @@ class AuthProtocol(object):
     def __init__(self, app, conf):
         self.LOG = logging.getLogger(conf.get('log_name', __name__))
         self.LOG.info('Starting keystone auth_token middleware')
-        self.conf = conf
         self.app = app
+
+        # options from paste override those from the config file
+        for k, v in six.iteritems(conf):
+            CONF.set_override(k, v, 'keystone_authtoken')
 
         # delay_auth_decision means we still allow unauthenticated requests
         # through and we let the downstream service make the final decision
@@ -546,11 +549,7 @@ class AuthProtocol(object):
         self._cache_initialized = True
 
     def _conf_get(self, name):
-        # try config from paste-deploy first
-        if name in self.conf:
-            return self.conf[name]
-        else:
-            return CONF.keystone_authtoken[name]
+        return CONF.keystone_authtoken[name]
 
     def _choose_api_version(self):
         """Determine the api version that we should use."""

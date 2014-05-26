@@ -33,6 +33,7 @@ import webob
 from keystoneclient.common import cms
 from keystoneclient import exceptions
 from keystoneclient.middleware import auth_token
+from keystoneclient.openstack.common.fixture import config
 from keystoneclient.openstack.common import jsonutils
 from keystoneclient.openstack.common import memorycache
 from keystoneclient.openstack.common import timeutils
@@ -218,6 +219,8 @@ class BaseAuthTokenMiddlewareTest(testtools.TestCase):
         self.fake_app = fake_app or FakeApp
         self.middleware = None
 
+        self.conf_fixture = self.useFixture(config.Config())
+
         self.conf = {
             'identity_uri': 'https://keystone.example.com:1234/testadmin/',
             'signing_dir': client_fixtures.CERTDIR,
@@ -239,6 +242,10 @@ class BaseAuthTokenMiddlewareTest(testtools.TestCase):
         """
         if conf:
             self.conf.update(conf)
+
+        # NOTE(jamielennox): reset before setting so that if set is called
+        # multiple times the old options are left as overrides on CONF
+        self.conf_fixture.conf.reset()
 
         if expected_env:
             self.expected_env.update(expected_env)
