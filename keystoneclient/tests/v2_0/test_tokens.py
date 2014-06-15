@@ -12,14 +12,12 @@
 
 import uuid
 
-import httpretty
-
 from keystoneclient.tests.v2_0 import utils
 
 
 class TokenTests(utils.TestCase):
-    @httpretty.activate
+
     def test_delete(self):
         id_ = uuid.uuid4().hex
-        self.stub_url(httpretty.DELETE, ['tokens', id_], status=204)
+        self.stub_url('DELETE', ['tokens', id_], status_code=204)
         self.client.tokens.delete(id_)

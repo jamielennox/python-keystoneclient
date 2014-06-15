@@ -12,8 +12,6 @@
 
 import uuid
 
-import httpretty
-
 from keystoneclient.tests.v2_0 import utils
 from keystoneclient.v2_0 import users
 
@@ -42,7 +40,6 @@ class UserTests(utils.TestCase):
             }
         }
 
-    @httpretty.activate
     def test_create(self):
         tenant_id = uuid.uuid4().hex
         user_id = uuid.uuid4().hex
@@ -67,7 +64,7 @@ class UserTests(utils.TestCase):
             }
         }
 
-        self.stub_url(httpretty.POST, ['users'], json=resp_body)
+        self.stub_url('POST', ['users'], json=resp_body)
 
         user = self.client.users.create(req_body['user']['name'],
                                         req_body['user']['password'],
@@ -80,7 +77,6 @@ class UserTests(utils.TestCase):
         self.assertEqual(user.email, "test@example.com")
         self.assertRequestBodyIs(json=req_body)
 
-    @httpretty.activate
     def test_create_user_without_email(self):
         tenant_id = uuid.uuid4().hex
         req_body = {
@@ -104,7 +100,7 @@ class UserTests(utils.TestCase):
             }
         }
 
-        self.stub_url(httpretty.POST, ['users'], json=resp_body)
+        self.stub_url('POST', ['users'], json=resp_body)
 
         user = self.client.users.create(
             req_body['user']['name'],
@@ -116,15 +112,12 @@ class UserTests(utils.TestCase):
         self.assertEqual(user.name, "gabriel")
         self.assertRequestBodyIs(json=req_body)
 
-    @httpretty.activate
     def test_delete(self):
-        self.stub_url(httpretty.DELETE, ['users', self.ADMIN_USER_ID],
-                      status=204)
+        self.stub_url('DELETE', ['users', self.ADMIN_USER_ID], status_code=204)
         self.client.users.delete(self.ADMIN_USER_ID)
 
-    @httpretty.activate
     def test_get(self):
-        self.stub_url(httpretty.GET, ['users', self.ADMIN_USER_ID],
+        self.stub_url('GET', ['users', self.ADMIN_USER_ID],
                       json={'user': self.TEST_USERS['users']['values'][0]})
 
         u = self.client.users.get(self.ADMIN_USER_ID)
@@ -132,42 +125,34 @@ class UserTests(utils.TestCase):
         self.assertEqual(u.id, self.ADMIN_USER_ID)
         self.assertEqual(u.name, 'admin')
 
-    @httpretty.activate
     def test_list(self):
-        self.stub_url(httpretty.GET, ['users'], json=self.TEST_USERS)
+        self.stub_url('GET', ['users'], json=self.TEST_USERS)
 
         user_list = self.client.users.list()
         [self.assertIsInstance(u, users.User) for u in user_list]
 
-    @httpretty.activate
     def test_list_limit(self):
-        self.stub_url(httpretty.GET, ['users'], json=self.TEST_USERS)
+        self.stub_url('GET', ['users'], json=self.TEST_USERS)
 
         user_list = self.client.users.list(limit=1)
-        self.assertEqual(httpretty.last_request().querystring,
-                         {'limit': ['1']})
+        self.assertQueryStringIs('limit=1')
         [self.assertIsInstance(u, users.User) for u in user_list]
 
-    @httpretty.activate
     def test_list_marker(self):
-        self.stub_url(httpretty.GET, ['users'], json=self.TEST_USERS)
+        self.stub_url('GET', ['users'], json=self.TEST_USERS)
 
         user_list = self.client.users.list(marker='foo')
-        self.assertDictEqual(httpretty.last_request().querystring,
-                             {'marker': ['foo']})
+        self.assertQueryStringIs('marker=foo')
         [self.assertIsInstance(u, users.User) for u in user_list]
 
-    @httpretty.activate
     def test_list_limit_marker(self):
-        self.stub_url(httpretty.GET, ['users'], json=self.TEST_USERS)
+        self.stub_url('GET', ['users'], json=self.TEST_USERS)
 
         user_list = self.client.users.list(limit=1, marker='foo')
 
-        self.assertDictEqual(httpretty.last_request().querystring,
-                             {'marker': ['foo'], 'limit': ['1']})
+        self.assertQueryStringIs('marker=foo&limit=1')
         [self.assertIsInstance(u, users.User) for u in user_list]
 
-    @httpretty.activate
     def test_update(self):
         req_1 = {
             "user": {
@@ -196,14 +181,14 @@ class UserTests(utils.TestCase):
             }
         }
 
-        self.stub_url(httpretty.PUT, ['users', self.DEMO_USER_ID], json=req_1)
-        self.stub_url(httpretty.PUT,
+        self.stub_url('PUT', ['users', self.DEMO_USER_ID], json=req_1)
+        self.stub_url('PUT',
                       ['users', self.DEMO_USER_ID, 'OS-KSADM', 'password'],
                       json=req_2)
-        self.stub_url(httpretty.PUT,
+        self.stub_url('PUT',
                       ['users', self.DEMO_USER_ID, 'OS-KSADM', 'tenant'],
                       json=req_3)
-        self.stub_url(httpretty.PUT,
+        self.stub_url('PUT',
                       ['users', self.DEMO_USER_ID, 'OS-KSADM', 'enabled'],
                       json=req_4)
 
@@ -218,7 +203,6 @@ class UserTests(utils.TestCase):
         self.client.users.update_enabled(self.DEMO_USER_ID, False)
         self.assertRequestBodyIs(json=req_4)
 
-    @httpretty.activate
     def test_update_own_password(self):
         req_body = {
             'user': {
@@ -229,8 +213,7 @@ class UserTests(utils.TestCase):
             'access': {}
         }
         user_id = uuid.uuid4().hex
-        self.stub_url(httpretty.PATCH, ['OS-KSCRUD', 'users', user_id],
-                      json=resp_body)
+        self.stub_url('PATCH', ['OS-KSCRUD', 'users', user_id], json=resp_body)
 
         self.client.user_id = user_id
         self.client.users.update_own_password('DCBA', 'ABCD')

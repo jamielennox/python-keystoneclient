@@ -13,12 +13,10 @@
 import abc
 import uuid
 
-import httpretty
 import six
 
 from keystoneclient.auth.identity import v2
 from keystoneclient.auth.identity import v3
-from keystoneclient.openstack.common import jsonutils
 from keystoneclient import session
 from keystoneclient.tests import utils
 
@@ -37,10 +35,6 @@ class CommonIdentityTests(object):
 
     def setUp(self):
         super(CommonIdentityTests, self).setUp()
-
-        httpretty.reset()
-        httpretty.enable()
-        self.addCleanup(httpretty.disable)
 
         self.TEST_URL = '%s%s' % (self.TEST_ROOT_URL, self.version)
         self.TEST_ADMIN_URL = '%s%s' % (self.TEST_ROOT_ADMIN_URL, self.version)
@@ -96,15 +90,14 @@ class CommonIdentityTests(object):
         """The API version being tested."""
 
     def test_discovering(self):
-        self.stub_url(httpretty.GET, [],
+        self.stub_url('GET', [],
                       base_url=self.TEST_COMPUTE_ADMIN,
                       json=self.TEST_DISCOVERY)
 
         body = 'SUCCESS'
 
         # which gives our sample values
-        self.stub_url(httpretty.GET, ['path'],
-                      body=body, status=200)
+        self.stub_url('GET', ['path'], text=body)
 
         a = self.create_auth_plugin()
         s = session.Session(auth=a)
@@ -118,9 +111,9 @@ class CommonIdentityTests(object):
 
         new_body = 'SC SUCCESS'
         # if we don't specify a version, we use the URL from the SC
-        self.stub_url(httpretty.GET, ['path'],
+        self.stub_url('GET', ['path'],
                       base_url=self.TEST_COMPUTE_ADMIN,
-                      body=new_body, status=200)
+                      text=new_body)
 
         resp = s.get('/path', endpoint_filter={'service_type': 'compute',
                                                'interface': 'admin'})
@@ -131,15 +124,11 @@ class CommonIdentityTests(object):
     def test_discovery_uses_session_cache(self):
         # register responses such that if the discovery URL is hit more than
         # once then the response will be invalid and not point to COMPUTE_ADMIN
-        disc_body = jsonutils.dumps(self.TEST_DISCOVERY)
-        disc_responses = [httpretty.Response(body=disc_body, status=200),
-                          httpretty.Response(body='', status=500)]
-        httpretty.register_uri(httpretty.GET,
-                               self.TEST_COMPUTE_ADMIN,
-                               responses=disc_responses)
+        resps = [{'json': self.TEST_DISCOVERY}, {'status_code': 500}]
+        self.adapter.register_uri('GET', self.TEST_COMPUTE_ADMIN, resps)
 
         body = 'SUCCESS'
-        self.stub_url(httpretty.GET, ['path'], body=body, status=200)
+        self.stub_url('GET', ['path'], text=body)
 
         # now either of the two plugins I use, it should not cause a second
         # request to the discovery url.
@@ -160,15 +149,11 @@ class CommonIdentityTests(object):
     def test_discovery_uses_plugin_cache(self):
         # register responses such that if the discovery URL is hit more than
         # once then the response will be invalid and not point to COMPUTE_ADMIN
-        disc_body = jsonutils.dumps(self.TEST_DISCOVERY)
-        disc_responses = [httpretty.Response(body=disc_body, status=200),
-                          httpretty.Response(body='', status=500)]
-        httpretty.register_uri(httpretty.GET,
-                               self.TEST_COMPUTE_ADMIN,
-                               responses=disc_responses)
+        resps = [{'json': self.TEST_DISCOVERY}, {'status_code': 500}]
+        self.adapter.register_uri('GET', self.TEST_COMPUTE_ADMIN, resps)
 
         body = 'SUCCESS'
-        self.stub_url(httpretty.GET, ['path'], body=body, status=200)
+        self.stub_url('GET', ['path'], text=body)
 
         # now either of the two sessions I use, it should not cause a second
         # request to the discovery url.
@@ -189,14 +174,14 @@ class CommonIdentityTests(object):
     def test_discovering_with_no_data(self):
         # which returns discovery information pointing to TEST_URL but there is
         # no data there.
-        self.stub_url(httpretty.GET, [],
+        self.stub_url('GET', [],
                       base_url=self.TEST_COMPUTE_ADMIN,
-                      status=400)
+                      status_code=400)
 
         # so the url that will be used is the same TEST_COMPUTE_ADMIN
         body = 'SUCCESS'
-        self.stub_url(httpretty.GET, ['path'],
-                      base_url=self.TEST_COMPUTE_ADMIN, body=body, status=200)
+        self.stub_url('GET', ['path'], base_url=self.TEST_COMPUTE_ADMIN,
+                      text=body, status_code=200)
 
         a = self.create_auth_plugin()
         s = session.Session(auth=a)
@@ -329,8 +314,8 @@ class V3(CommonIdentityTests, utils.TestCase):
         if not subject_token:
             subject_token = self.TEST_TOKEN
 
-        self.stub_url(httpretty.POST, ['auth', 'tokens'],
-                      X_Subject_Token=subject_token, **kwargs)
+        kwargs.setdefault('headers', {})['X-Subject-Token'] = subject_token
+        self.stub_url('POST', ['auth', 'tokens'], **kwargs)
 
     def create_auth_plugin(self):
         return v3.Password(self.TEST_URL,
@@ -416,4 +401,4 @@ class V2(CommonIdentityTests, utils.TestCase):
         self.stub_auth(json=token)
 
     def stub_auth(self, **kwargs):
-        self.stub_url(httpretty.POST, ['tokens'], **kwargs)
+        self.stub_url('POST', ['tokens'], **kwargs)

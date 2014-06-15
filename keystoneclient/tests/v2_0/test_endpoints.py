@@ -10,8 +10,6 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-import httpretty
-
 from keystoneclient.tests.v2_0 import utils
 from keystoneclient.v2_0 import endpoints
 
@@ -38,7 +36,6 @@ class EndpointTests(utils.TestCase):
             ]
         }
 
-    @httpretty.activate
     def test_create(self):
         req_body = {
             "endpoint": {
@@ -60,7 +57,7 @@ class EndpointTests(utils.TestCase):
             }
         }
 
-        self.stub_url(httpretty.POST, ['endpoints'], json=resp_body)
+        self.stub_url('POST', ['endpoints'], json=resp_body)
 
         endpoint = self.client.endpoints.create(
             region=req_body['endpoint']['region'],
@@ -72,14 +69,12 @@ class EndpointTests(utils.TestCase):
         self.assertIsInstance(endpoint, endpoints.Endpoint)
         self.assertRequestBodyIs(json=req_body)
 
-    @httpretty.activate
     def test_delete(self):
-        self.stub_url(httpretty.DELETE, ['endpoints', '8f953'], status=204)
+        self.stub_url('DELETE', ['endpoints', '8f953'], status_code=204)
         self.client.endpoints.delete('8f953')
 
-    @httpretty.activate
     def test_list(self):
-        self.stub_url(httpretty.GET, ['endpoints'], json=self.TEST_ENDPOINTS)
+        self.stub_url('GET', ['endpoints'], json=self.TEST_ENDPOINTS)
 
         endpoint_list = self.client.endpoints.list()
         [self.assertIsInstance(r, endpoints.Endpoint)

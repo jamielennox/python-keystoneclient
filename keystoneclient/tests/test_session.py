@@ -12,7 +12,6 @@
 
 import uuid
 
-import httpretty
 import mock
 from oslo.config import cfg
 import requests
@@ -32,73 +31,66 @@ class SessionTests(utils.TestCase):
 
     TEST_URL = 'http://127.0.0.1:5000/'
 
-    @httpretty.activate
     def test_get(self):
         session = client_session.Session()
-        self.stub_url(httpretty.GET, body='response')
+        self.stub_url('GET', text='response')
         resp = session.get(self.TEST_URL)
 
-        self.assertEqual(httpretty.GET, httpretty.last_request().method)
+        self.assertEqual('GET', self.adapter.last_request.method)
         self.assertEqual(resp.text, 'response')
         self.assertTrue(resp.ok)
 
-    @httpretty.activate
     def test_post(self):
         session = client_session.Session()
-        self.stub_url(httpretty.POST, body='response')
+        self.stub_url('POST', text='response')
         resp = session.post(self.TEST_URL, json={'hello': 'world'})
 
-        self.assertEqual(httpretty.POST, httpretty.last_request().method)
+        self.assertEqual('POST', self.adapter.last_request.method)
         self.assertEqual(resp.text, 'response')
         self.assertTrue(resp.ok)
         self.assertRequestBodyIs(json={'hello': 'world'})
 
-    @httpretty.activate
     def test_head(self):
         session = client_session.Session()
-        self.stub_url(httpretty.HEAD)
+        self.stub_url('HEAD')
         resp = session.head(self.TEST_URL)
 
-        self.assertEqual(httpretty.HEAD, httpretty.last_request().method)
+        self.assertEqual('HEAD', self.adapter.last_request.method)
         self.assertTrue(resp.ok)
         self.assertRequestBodyIs('')
 
-    @httpretty.activate
     def test_put(self):
         session = client_session.Session()
-        self.stub_url(httpretty.PUT, body='response')
+        self.stub_url('PUT', text='response')
         resp = session.put(self.TEST_URL, json={'hello': 'world'})
 
-        self.assertEqual(httpretty.PUT, httpretty.last_request().method)
+        self.assertEqual('PUT', self.adapter.last_request.method)
         self.assertEqual(resp.text, 'response')
         self.assertTrue(resp.ok)
         self.assertRequestBodyIs(json={'hello': 'world'})
 
-    @httpretty.activate
     def test_delete(self):
         session = client_session.Session()
-        self.stub_url(httpretty.DELETE, body='response')
+        self.stub_url('DELETE', text='response')
         resp = session.delete(self.TEST_URL)
 
-        self.assertEqual(httpretty.DELETE, httpretty.last_request().method)
+        self.assertEqual('DELETE', self.adapter.last_request.method)
         self.assertTrue(resp.ok)
         self.assertEqual(resp.text, 'response')
 
-    @httpretty.activate
     def test_patch(self):
         session = client_session.Session()
-        self.stub_url(httpretty.PATCH, body='response')
+        self.stub_url('PATCH', text='response')
         resp = session.patch(self.TEST_URL, json={'hello': 'world'})
 
-        self.assertEqual(httpretty.PATCH, httpretty.last_request().method)
+        self.assertEqual('PATCH', self.adapter.last_request.method)
         self.assertTrue(resp.ok)
         self.assertEqual(resp.text, 'response')
         self.assertRequestBodyIs(json={'hello': 'world'})
 
-    @httpretty.activate
     def test_user_agent(self):
         session = client_session.Session(user_agent='test-agent')
-        self.stub_url(httpretty.GET, body='response')
+        self.stub_url('GET', text='response')
         resp = session.get(self.TEST_URL)
 
         self.assertTrue(resp.ok)
@@ -113,7 +105,6 @@ class SessionTests(utils.TestCase):
         self.assertTrue(resp.ok)
         self.assertRequestHeaderEqual('User-Agent', 'overrides-agent')
 
-    @httpretty.activate
     def test_http_session_opts(self):
         session = client_session.Session(cert='cert.pem', timeout=5,
                                          verify='certs')
@@ -133,26 +124,23 @@ class SessionTests(utils.TestCase):
             self.assertEqual(mock_kwargs['verify'], 'certs')
             self.assertEqual(mock_kwargs['timeout'], 5)
 
-    @httpretty.activate
     def test_not_found(self):
         session = client_session.Session()
-        self.stub_url(httpretty.GET, status=404)
+        self.stub_url('GET', status_code=404)
         self.assertRaises(exceptions.NotFound, session.get, self.TEST_URL)
 
-    @httpretty.activate
     def test_server_error(self):
         session = client_session.Session()
-        self.stub_url(httpretty.GET, status=500)
+        self.stub_url('GET', status_code=500)
         self.assertRaises(exceptions.InternalServerError,
                           session.get, self.TEST_URL)
 
-    @httpretty.activate
     def test_session_debug_output(self):
         session = client_session.Session(verify=False)
         headers = {'HEADERA': 'HEADERVALB'}
         body = 'BODYRESPONSE'
         data = 'BODYDATA'
-        self.stub_url(httpretty.POST, body=body)
+        self.stub_url('POST', text=body)
         session.post(self.TEST_URL, headers=headers, data=data)
 
         self.assertIn('curl', self.logger.output)
@@ -176,37 +164,36 @@ class RedirectTests(utils.TestCase):
     DEFAULT_REDIRECT_BODY = 'Redirect'
     DEFAULT_RESP_BODY = 'Found'
 
-    def setup_redirects(self, method=httpretty.GET, status=305,
+    def setup_redirects(self, method='GET', status_code=305,
                         redirect_kwargs={}, final_kwargs={}):
-        redirect_kwargs.setdefault('body', self.DEFAULT_REDIRECT_BODY)
+        redirect_kwargs.setdefault('text', self.DEFAULT_REDIRECT_BODY)
 
         for s, d in zip(self.REDIRECT_CHAIN, self.REDIRECT_CHAIN[1:]):
-            httpretty.register_uri(method, s, status=status, location=d,
-                                   **redirect_kwargs)
+            self.adapter.register_uri(method, s, status_code=status_code,
+                                      headers={'Location': d},
+                                      **redirect_kwargs)
 
-        final_kwargs.setdefault('status', 200)
-        final_kwargs.setdefault('body', self.DEFAULT_RESP_BODY)
-        httpretty.register_uri(method, self.REDIRECT_CHAIN[-1], **final_kwargs)
+        final_kwargs.setdefault('status_code', 200)
+        final_kwargs.setdefault('text', self.DEFAULT_RESP_BODY)
+        self.adapter.register_uri(method, self.REDIRECT_CHAIN[-1],
+                                  **final_kwargs)
 
     def assertResponse(self, resp):
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.text, self.DEFAULT_RESP_BODY)
 
-    @httpretty.activate
     def test_basic_get(self):
         session = client_session.Session()
         self.setup_redirects()
         resp = session.get(self.REDIRECT_CHAIN[-2])
         self.assertResponse(resp)
 
-    @httpretty.activate
     def test_basic_post_keeps_correct_method(self):
         session = client_session.Session()
-        self.setup_redirects(method=httpretty.POST, status=301)
+        self.setup_redirects(method='POST', status_code=301)
         resp = session.post(self.REDIRECT_CHAIN[-2])
         self.assertResponse(resp)
 
-    @httpretty.activate
     def test_redirect_forever(self):
         session = client_session.Session(redirect=True)
         self.setup_redirects()
@@ -214,7 +201,6 @@ class RedirectTests(utils.TestCase):
         self.assertResponse(resp)
         self.assertTrue(len(resp.history), len(self.REDIRECT_CHAIN))
 
-    @httpretty.activate
     def test_no_redirect(self):
         session = client_session.Session(redirect=False)
         self.setup_redirects()
@@ -222,7 +208,6 @@ class RedirectTests(utils.TestCase):
         self.assertEqual(resp.status_code, 305)
         self.assertEqual(resp.url, self.REDIRECT_CHAIN[0])
 
-    @httpretty.activate
     def test_redirect_limit(self):
         self.setup_redirects()
         for i in (1, 2):
@@ -232,9 +217,8 @@ class RedirectTests(utils.TestCase):
             self.assertEqual(resp.url, self.REDIRECT_CHAIN[i])
             self.assertEqual(resp.text, self.DEFAULT_REDIRECT_BODY)
 
-    @httpretty.activate
     def test_history_matches_requests(self):
-        self.setup_redirects(status=301)
+        self.setup_redirects(status_code=301)
         session = client_session.Session(redirect=True)
         req_resp = requests.get(self.REDIRECT_CHAIN[0],
                                 allow_redirects=True)
@@ -344,13 +328,12 @@ class SessionAuthTests(utils.TestCase):
     TEST_JSON = {'hello': 'world'}
 
     def stub_service_url(self, service_type, interface, path,
-                         method=httpretty.GET, **kwargs):
+                         method='GET', **kwargs):
         base_url = AuthPlugin.SERVICE_URLS[service_type][interface]
         uri = "%s/%s" % (base_url.rstrip('/'), path.lstrip('/'))
 
-        httpretty.register_uri(method, uri, **kwargs)
+        self.adapter.register_uri(method, uri, **kwargs)
 
-    @httpretty.activate
     def test_auth_plugin_default_with_plugin(self):
         self.stub_url('GET', base_url=self.TEST_URL, json=self.TEST_JSON)
 
@@ -362,7 +345,6 @@ class SessionAuthTests(utils.TestCase):
 
         self.assertRequestHeaderEqual('X-Auth-Token', AuthPlugin.TEST_TOKEN)
 
-    @httpretty.activate
     def test_auth_plugin_disable(self):
         self.stub_url('GET', base_url=self.TEST_URL, json=self.TEST_JSON)
 
@@ -373,7 +355,6 @@ class SessionAuthTests(utils.TestCase):
 
         self.assertRequestHeaderEqual('X-Auth-Token', None)
 
-    @httpretty.activate
     def test_service_type_urls(self):
         service_type = 'compute'
         interface = 'public'
@@ -384,15 +365,16 @@ class SessionAuthTests(utils.TestCase):
         self.stub_service_url(service_type=service_type,
                               interface=interface,
                               path=path,
-                              status=status,
-                              body=body)
+                              status_code=status,
+                              text=body)
 
         sess = client_session.Session(auth=AuthPlugin())
         resp = sess.get(path,
                         endpoint_filter={'service_type': service_type,
                                          'interface': interface})
 
-        self.assertEqual(httpretty.last_request().path, '/v1.0/instances')
+        self.assertEqual(self.adapter.last_request.url,
+                         AuthPlugin.SERVICE_URLS['compute']['public'] + path)
         self.assertEqual(resp.text, body)
         self.assertEqual(resp.status_code, status)
 
@@ -410,12 +392,10 @@ class SessionAuthTests(utils.TestCase):
                           endpoint_filter={'service_type': 'unknown',
                                            'interface': 'public'})
 
-    @httpretty.activate
     def test_raises_exc_only_when_asked(self):
         # A request that returns a HTTP error should by default raise an
         # exception by default, if you specify raise_exc=False then it will not
-
-        self.stub_url(httpretty.GET, status=401)
+        self.adapter.register_uri('GET', self.TEST_URL, status_code=401)
 
         sess = client_session.Session()
         self.assertRaises(exceptions.Unauthorized, sess.get, self.TEST_URL)
@@ -423,14 +403,13 @@ class SessionAuthTests(utils.TestCase):
         resp = sess.get(self.TEST_URL, raise_exc=False)
         self.assertEqual(401, resp.status_code)
 
-    @httpretty.activate
     def test_passed_auth_plugin(self):
         passed = CalledAuthPlugin()
         sess = client_session.Session()
 
-        httpretty.register_uri(httpretty.GET,
-                               CalledAuthPlugin.ENDPOINT + 'path',
-                               status=200)
+        self.adapter.register_uri('GET',
+                                  CalledAuthPlugin.ENDPOINT + 'path',
+                                  status_code=200)
         endpoint_filter = {'service_type': 'identity'}
 
         # no plugin with authenticated won't work
@@ -447,16 +426,15 @@ class SessionAuthTests(utils.TestCase):
         self.assertTrue(passed.get_endpoint_called)
         self.assertTrue(passed.get_token_called)
 
-    @httpretty.activate
     def test_passed_auth_plugin_overrides(self):
         fixed = CalledAuthPlugin()
         passed = CalledAuthPlugin()
 
         sess = client_session.Session(fixed)
 
-        httpretty.register_uri(httpretty.GET,
-                               CalledAuthPlugin.ENDPOINT + 'path',
-                               status=200)
+        self.adapter.register_uri('GET',
+                                  CalledAuthPlugin.ENDPOINT + 'path',
+                                  status_code=200)
 
         resp = sess.get('path', auth=passed,
                         endpoint_filter={'service_type': 'identity'})
@@ -484,15 +462,13 @@ class SessionAuthTests(utils.TestCase):
                                            auth=requests_auth,
                                            verify=mock.ANY)
 
-    @httpretty.activate
     def test_reauth_called(self):
         auth = CalledAuthPlugin(invalidate=True)
         sess = client_session.Session(auth=auth)
 
-        responses = [httpretty.Response(body='Failed', status=401),
-                     httpretty.Response(body='Hello', status=200)]
-        httpretty.register_uri(httpretty.GET, self.TEST_URL,
-                               responses=responses)
+        self.adapter.register_uri('GET', self.TEST_URL,
+                                  [{'text': 'Failed', 'status_code': 401},
+                                   {'text': 'Hello', 'status_code': 200}])
 
         # allow_reauth=True is the default
         resp = sess.get(self.TEST_URL, authenticated=True)
@@ -501,15 +477,13 @@ class SessionAuthTests(utils.TestCase):
         self.assertEqual('Hello', resp.text)
         self.assertTrue(auth.invalidate_called)
 
-    @httpretty.activate
     def test_reauth_not_called(self):
         auth = CalledAuthPlugin(invalidate=True)
         sess = client_session.Session(auth=auth)
 
-        responses = [httpretty.Response(body='Failed', status=401),
-                     httpretty.Response(body='Hello', status=200)]
-        httpretty.register_uri(httpretty.GET, self.TEST_URL,
-                               responses=responses)
+        self.adapter.register_uri('GET', self.TEST_URL,
+                                  [{'text': 'Failed', 'status_code': 401},
+                                   {'text': 'Hello', 'status_code': 200}])
 
         self.assertRaises(exceptions.Unauthorized, sess.get, self.TEST_URL,
                           authenticated=True, allow_reauth=False)
@@ -526,10 +500,9 @@ class AdapterTest(utils.TestCase):
 
     TEST_URL = CalledAuthPlugin.ENDPOINT
 
-    @httpretty.activate
     def test_setting_variables(self):
         response = uuid.uuid4().hex
-        self.stub_url(httpretty.GET, body=response)
+        self.stub_url('GET', text=response)
 
         auth = CalledAuthPlugin()
         sess = client_session.Session()
@@ -556,13 +529,12 @@ class AdapterTest(utils.TestCase):
         self.assertTrue(auth.get_token_called)
         self.assertRequestHeaderEqual('User-Agent', self.USER_AGENT)
 
-    @httpretty.activate
     def test_legacy_binding(self):
         key = uuid.uuid4().hex
         val = uuid.uuid4().hex
         response = jsonutils.dumps({key: val})
 
-        self.stub_url(httpretty.GET, body=response)
+        self.stub_url('GET', text=response)
 
         auth = CalledAuthPlugin()
         sess = client_session.Session(auth=auth)
@@ -576,10 +548,10 @@ class AdapterTest(utils.TestCase):
         self.assertEqual(resp.text, response)
         self.assertEqual(val, body[key])
 
-    @httpretty.activate
     def test_legacy_binding_non_json_resp(self):
         response = uuid.uuid4().hex
-        self.stub_url(httpretty.GET, body=response, content_type='text/html')
+        self.stub_url('GET', text=response,
+                      headers={'Content-Type': 'text/html'})
 
         auth = CalledAuthPlugin()
         sess = client_session.Session(auth=auth)

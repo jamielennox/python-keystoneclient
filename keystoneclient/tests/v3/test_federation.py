@@ -12,8 +12,6 @@
 
 import uuid
 
-import httpretty
-
 from keystoneclient.tests.v3 import utils
 from keystoneclient.v3.contrib.federation import identity_providers
 from keystoneclient.v3.contrib.federation import mappings
@@ -64,7 +62,6 @@ class IdentityProviderTests(utils.TestCase, utils.CrudTests):
             self.assertRaises(TypeError, getattr(self.manager, f_name),
                               *args)
 
-    @httpretty.activate
     def test_create(self, ref=None, req_ref=None):
         ref = ref or self.new_ref()
 
@@ -75,7 +72,7 @@ class IdentityProviderTests(utils.TestCase, utils.CrudTests):
         req_ref = (req_ref or ref).copy()
         req_ref.pop('id')
 
-        self.stub_entity(httpretty.PUT, entity=ref, id=ref['id'], status=201)
+        self.stub_entity('PUT', entity=ref, id=ref['id'], status_code=201)
 
         returned = self.manager.create(**ref)
         self.assertIsInstance(returned, self.model)
@@ -102,7 +99,6 @@ class MappingTests(utils.TestCase, utils.CrudTests):
                                     uuid.uuid4().hex])
         return kwargs
 
-    @httpretty.activate
     def test_create(self, ref=None, req_ref=None):
         ref = ref or self.new_ref()
         manager_ref = ref.copy()
@@ -114,8 +110,8 @@ class MappingTests(utils.TestCase, utils.CrudTests):
         # from datetime object to timestamp string)
         req_ref = (req_ref or ref).copy()
 
-        self.stub_entity(httpretty.PUT, entity=req_ref, id=mapping_id,
-                         status=201)
+        self.stub_entity('PUT', entity=req_ref, id=mapping_id,
+                         status_code=201)
 
         returned = self.manager.create(mapping_id=mapping_id, **manager_ref)
         self.assertIsInstance(returned, self.model)
