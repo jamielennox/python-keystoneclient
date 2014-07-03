@@ -161,22 +161,24 @@ EndpointFilterManager`
         """Initialize a new client for the Keystone v3 API."""
         super(Client, self).__init__(**kwargs)
 
-        self.credentials = credentials.CredentialManager(self)
-        self.endpoint_filter = endpoint_filter.EndpointFilterManager(self)
-        self.endpoints = endpoints.EndpointManager(self)
-        self.domains = domains.DomainManager(self)
-        self.federation = federation.FederationManager(self)
-        self.groups = groups.GroupManager(self)
-        self.oauth1 = oauth1.create_oauth_manager(self)
-        self.policies = policies.PolicyManager(self)
-        self.projects = projects.ProjectManager(self)
-        self.regions = regions.RegionManager(self)
-        self.role_assignments = role_assignments.RoleAssignmentManager(self)
-        self.roles = roles.RoleManager(self)
-        self.services = services.ServiceManager(self)
-        self.tokens = tokens.TokenManager(self)
-        self.trusts = trusts.TrustManager(self)
-        self.users = users.UserManager(self)
+        self.credentials = credentials.CredentialManager(self.http_adapter)
+        self.endpoint_filter = (
+            endpoint_filter.EndpointFilterManager(self.http_adapter))
+        self.endpoints = endpoints.EndpointManager(self.http_adapter)
+        self.domains = domains.DomainManager(self.http_adapter)
+        self.federation = federation.FederationManager(self.http_adapter)
+        self.groups = groups.GroupManager(self.http_adapter)
+        self.oauth1 = oauth1.create_oauth_manager(self.http_adapter)
+        self.policies = policies.PolicyManager(self.http_adapter)
+        self.projects = projects.ProjectManager(self.http_adapter)
+        self.regions = regions.RegionManager(self.http_adapter)
+        self.role_assignments = (
+            role_assignments.RoleAssignmentManager(self.http_adapter))
+        self.roles = roles.RoleManager(self.http_adapter)
+        self.services = services.ServiceManager(self.http_adapter)
+        self.tokens = tokens.TokenManager(self.http_adapter)
+        self.trusts = trusts.TrustManager(self.http_adapter)
+        self.users = users.UserManager(self.http_adapter)
 
         # DEPRECATED: if session is passed then we go to the new behaviour of
         # authenticating on the first required call.
