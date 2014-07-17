@@ -10,15 +10,19 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+import uuid
+
 import six
 from testtools import matchers
 
 from keystoneclient import _discover
+from keystoneclient.auth import token_endpoint
 from keystoneclient import client
 from keystoneclient import discover
 from keystoneclient import exceptions
 from keystoneclient import fixture
 from keystoneclient.openstack.common import jsonutils
+from keystoneclient import session
 from keystoneclient.tests import utils
 from keystoneclient.v2_0 import client as v2_client
 from keystoneclient.v3 import client as v3_client
@@ -546,6 +550,34 @@ class ClientDiscoveryTests(utils.TestCase):
         disc = discover.Discover(auth_url=BASE_URL)
         self.assertRaises(exceptions.DiscoveryFailure,
                           disc.create_client, version=(3, 0))
+
+    def test_setting_authenticated_true(self):
+        self.requests.register_uri('GET', BASE_URL, status_code=300,
+                                   text=V3_VERSION_LIST)
+
+        token = uuid.uuid4().hex
+        url = 'http://testurl'
+        a = token_endpoint.Token(url, token)
+        s = session.Session(auth=a)
+
+        # will default to true as there is a plugin on the session
+        discover.Discover(s, auth_url=BASE_URL)
+
+        self.assertEqual(BASE_URL, self.requests.last_request.url)
+        self.assertRequestHeaderEqual('X-Auth-Token', token)
+
+    def test_setting_authenticated_false(self):
+        self.requests.register_uri('GET', BASE_URL, status_code=300,
+                                   text=V3_VERSION_LIST)
+
+        token = uuid.uuid4().hex
+        a = token_endpoint.Token('http://testurl', token)
+        s = session.Session(auth=a)
+
+        discover.Discover(s, auth_url=BASE_URL, authenticated=False)
+
+        self.assertEqual(BASE_URL, self.requests.last_request.url)
+        self.assertNotIn('X-Auth-Token', self.requests.last_request.headers)
 
 
 class DiscoverQueryTests(utils.TestCase):
