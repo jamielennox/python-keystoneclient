@@ -34,12 +34,14 @@ class BaseIdentityPlugin(base.BaseAuthPlugin):
                  username=None,
                  password=None,
                  token=None,
-                 trust_id=None):
+                 trust_id=None,
+                 reauthenticate=True):
 
         super(BaseIdentityPlugin, self).__init__()
 
         self.auth_url = auth_url
         self.auth_ref = None
+        self.reauthenticate = reauthenticate
 
         self._endpoint_cache = {}
 
@@ -91,8 +93,10 @@ class BaseIdentityPlugin(base.BaseAuthPlugin):
 
         :returns AccessInfo: Valid AccessInfo
         """
-        if (not self.auth_ref or
-                self.auth_ref.will_expire_soon(self.MIN_TOKEN_LIFE_SECONDS)):
+        if not self.auth_ref:
+            self.auth_ref = self.get_auth_ref(session)
+        elif (self.reauthenticate and
+              self.auth_ref.will_expire_soon(self.MIN_TOKEN_LIFE_SECONDS)):
             self.auth_ref = self.get_auth_ref(session)
 
         return self.auth_ref

@@ -11,15 +11,18 @@
 # under the License.
 
 import abc
+import datetime
 import uuid
 
 import httpretty
 import six
 
+from keystoneclient import access
 from keystoneclient.auth.identity import v2
 from keystoneclient.auth.identity import v3
 from keystoneclient import fixture
 from keystoneclient.openstack.common import jsonutils
+from keystoneclient.openstack.common import timeutils
 from keystoneclient import session
 from keystoneclient.tests import utils
 
@@ -50,7 +53,7 @@ class CommonIdentityTests(object):
         self.stub_auth_data()
 
     @abc.abstractmethod
-    def create_auth_plugin(self):
+    def create_auth_plugin(self, **kwargs):
         """Create an auth plugin that makes sense for the auth data.
 
         It doesn't really matter what auth mechanism is used but it should be
@@ -58,12 +61,16 @@ class CommonIdentityTests(object):
         """
 
     @abc.abstractmethod
-    def stub_auth_data(self):
-        """Stub out authentication data.
+    def get_auth_data(self, **kwargs):
+        """Return fake authentication data.
 
         This should register a valid token response and ensure that the compute
         endpoints are set to TEST_COMPUTE_PUBLIC, _INTERNAL and _ADMIN.
         """
+
+    def stub_auth_data(self, **kwargs):
+        token = self.get_auth_data(**kwargs)
+        self.stub_auth(json=token)
 
     @abc.abstractproperty
     def version(self):
@@ -182,6 +189,36 @@ class CommonIdentityTests(object):
         self.assertEqual(200, resp.status_code)
         self.assertEqual(body, resp.text)
 
+    def test_reauthenticate(self):
+        expires = timeutils.utcnow() - datetime.timedelta(minutes=20)
+        expired_token = self.get_auth_data(expires=expires)
+        expired_auth_ref = access.AccessInfo.factory(body=expired_token)
+
+        body = 'SUCCESS'
+        self.stub_url(httpretty.GET, ['path'],
+                      base_url=self.TEST_COMPUTE_ADMIN, body=body, status=200)
+
+        a = self.create_auth_plugin()
+        a.auth_ref = expired_auth_ref
+
+        s = session.Session(auth=a)
+        self.assertIsNot(expired_auth_ref, a.get_access(s))
+
+    def test_no_reauthenticate(self):
+        expires = timeutils.utcnow() - datetime.timedelta(minutes=20)
+        expired_token = self.get_auth_data(expires=expires)
+        expired_auth_ref = access.AccessInfo.factory(body=expired_token)
+
+        body = 'SUCCESS'
+        self.stub_url(httpretty.GET, ['path'],
+                      base_url=self.TEST_COMPUTE_ADMIN, body=body, status=200)
+
+        a = self.create_auth_plugin(reauthenticate=False)
+        a.auth_ref = expired_auth_ref
+
+        s = session.Session(auth=a)
+        self.assertIs(expired_auth_ref, a.get_access(s))
+
 
 class V3(CommonIdentityTests, utils.TestCase):
 
@@ -189,8 +226,8 @@ class V3(CommonIdentityTests, utils.TestCase):
     def version(self):
         return 'v3'
 
-    def stub_auth_data(self):
-        token = fixture.V3Token()
+    def get_auth_data(self, **kwargs):
+        token = fixture.V3Token(**kwargs)
         region = 'RegionOne'
 
         svc = token.add_service('identity')
@@ -202,7 +239,7 @@ class V3(CommonIdentityTests, utils.TestCase):
                                    internal=self.TEST_COMPUTE_INTERNAL,
                                    region=region)
 
-        self.stub_auth(json=token)
+        return token
 
     def stub_auth(self, subject_token=None, **kwargs):
         if not subject_token:
@@ -211,10 +248,11 @@ class V3(CommonIdentityTests, utils.TestCase):
         self.stub_url(httpretty.POST, ['auth', 'tokens'],
                       X_Subject_Token=subject_token, **kwargs)
 
-    def create_auth_plugin(self):
-        return v3.Password(self.TEST_URL,
-                           username=self.TEST_USER,
-                           password=self.TEST_PASS)
+    def create_auth_plugin(self, **kwargs):
+        kwargs.setdefault('auth_url', self.TEST_URL)
+        kwargs.setdefault('username', self.TEST_USER)
+        kwargs.setdefault('password', self.TEST_PASS)
+        return v3.Password(**kwargs)
 
 
 class V2(CommonIdentityTests, utils.TestCase):
@@ -223,13 +261,14 @@ class V2(CommonIdentityTests, utils.TestCase):
     def version(self):
         return 'v2.0'
 
-    def create_auth_plugin(self):
-        return v2.Password(self.TEST_URL,
-                           username=self.TEST_USER,
-                           password=self.TEST_PASS)
+    def create_auth_plugin(self, **kwargs):
+        kwargs.setdefault('auth_url', self.TEST_URL)
+        kwargs.setdefault('username', self.TEST_USER)
+        kwargs.setdefault('password', self.TEST_PASS)
+        return v2.Password(**kwargs)
 
-    def stub_auth_data(self):
-        token = fixture.V2Token()
+    def get_auth_data(self, **kwargs):
+        token = fixture.V2Token(**kwargs)
         region = 'RegionOne'
 
         svc = token.add_service('identity')
@@ -241,7 +280,7 @@ class V2(CommonIdentityTests, utils.TestCase):
                          admin=self.TEST_COMPUTE_ADMIN,
                          region=region)
 
-        self.stub_auth(json=token)
+        return token
 
     def stub_auth(self, **kwargs):
         self.stub_url(httpretty.POST, ['tokens'], **kwargs)
