@@ -25,19 +25,16 @@ Python library, continue using python-keystoneclient.
 from __future__ import print_function
 
 import argparse
-import getpass
 import logging
 import os
 import sys
 
-import six
-
 import keystoneclient
 from keystoneclient import access
+from keystoneclient import auth
 from keystoneclient.contrib.bootstrap import shell as shell_bootstrap
 from keystoneclient import exceptions as exc
 from keystoneclient.generic import shell as shell_generic
-from keystoneclient.openstack.common import strutils
 from keystoneclient import session
 from keystoneclient import utils
 from keystoneclient.v2_0 import shell as shell_v2_0
@@ -91,49 +88,6 @@ class OpenStackIdentityShell(object):
                                  "calls. Helpful for debugging and "
                                  "understanding the API calls.")
 
-        parser.add_argument('--os-username',
-                            metavar='<auth-user-name>',
-                            default=env('OS_USERNAME'),
-                            help='Name used for authentication with the '
-                                 'OpenStack Identity service. '
-                                 'Defaults to env[OS_USERNAME].')
-        parser.add_argument('--os_username',
-                            help=argparse.SUPPRESS)
-
-        parser.add_argument('--os-password',
-                            metavar='<auth-password>',
-                            default=env('OS_PASSWORD'),
-                            help='Password used for authentication with the '
-                                 'OpenStack Identity service. '
-                                 'Defaults to env[OS_PASSWORD].')
-        parser.add_argument('--os_password',
-                            help=argparse.SUPPRESS)
-
-        parser.add_argument('--os-tenant-name',
-                            metavar='<auth-tenant-name>',
-                            default=env('OS_TENANT_NAME'),
-                            help='Tenant to request authorization on. '
-                                 'Defaults to env[OS_TENANT_NAME].')
-        parser.add_argument('--os_tenant_name',
-                            help=argparse.SUPPRESS)
-
-        parser.add_argument('--os-tenant-id',
-                            metavar='<tenant-id>',
-                            default=env('OS_TENANT_ID'),
-                            help='Tenant to request authorization on. '
-                                 'Defaults to env[OS_TENANT_ID].')
-        parser.add_argument('--os_tenant_id',
-                            help=argparse.SUPPRESS)
-
-        parser.add_argument('--os-auth-url',
-                            metavar='<auth-url>',
-                            default=env('OS_AUTH_URL'),
-                            help='Specify the Identity endpoint to use for '
-                                 'authentication. '
-                                 'Defaults to env[OS_AUTH_URL].')
-        parser.add_argument('--os_auth_url',
-                            help=argparse.SUPPRESS)
-
         parser.add_argument('--os-region-name',
                             metavar='<region-name>',
                             default=env('OS_REGION_NAME'),
@@ -152,13 +106,13 @@ class OpenStackIdentityShell(object):
         parser.add_argument('--os_identity_api_version',
                             help=argparse.SUPPRESS)
 
-        parser.add_argument('--os-token',
-                            metavar='<service-token>',
-                            default=env('OS_SERVICE_TOKEN'),
-                            help='Specify an existing token to use instead of '
-                                 'retrieving one via authentication (e.g. '
-                                 'with username & password). '
-                                 'Defaults to env[OS_SERVICE_TOKEN].')
+        # parser.add_argument('--os-token',
+        #                     metavar='<service-token>',
+        #                     default=env('OS_SERVICE_TOKEN'),
+        #                     help='Specify an existing token to use instead of '
+        #                          'retrieving one via authentication (e.g. '
+        #                          'with username & password). '
+        #                          'Defaults to env[OS_SERVICE_TOKEN].')
 
         parser.add_argument('--os-endpoint',
                             metavar='<service-endpoint>',
@@ -205,6 +159,15 @@ class OpenStackIdentityShell(object):
         parser.add_argument('--os_cert', help=argparse.SUPPRESS)
 
         return parser
+
+    def register_auth_arguments(self, parser, argv):
+        auth.register_argparse_arguments(parser, argv, default='cli')
+
+        parser.add_argument('--os_username', help=argparse.SUPPRESS)
+        parser.add_argument('--os_password', help=argparse.SUPPRESS)
+        parser.add_argument('--os_tenant_name', help=argparse.SUPPRESS)
+        parser.add_argument('--os_tenant_id', help=argparse.SUPPRESS)
+        parser.add_argument('--os_auth_url', help=argparse.SUPPRESS)
 
     def get_subcommand_parser(self, version):
         parser = self.get_base_parser()
@@ -290,22 +253,6 @@ class OpenStackIdentityShell(object):
                         'Expecting a username provided via either '
                         '--os-username or env[OS_USERNAME]')
 
-                if not args.os_password:
-                    # No password, If we've got a tty, try prompting for it
-                    if hasattr(sys.stdin, 'isatty') and sys.stdin.isatty():
-                        # Check for Ctl-D
-                        try:
-                            args.os_password = getpass.getpass('OS Password: ')
-                        except EOFError:
-                            pass
-                    # No password because we didn't have a tty or the
-                    # user Ctl-D when prompted?
-                    if not args.os_password:
-                        raise exc.CommandError(
-                            'Expecting a password provided via either '
-                            '--os-password, env[OS_PASSWORD], or '
-                            'prompted response')
-
             else:
                 raise exc.CommandError('Expecting authentication method via'
                                        '\n  either a service token, '
@@ -316,11 +263,13 @@ class OpenStackIdentityShell(object):
     def main(self, argv):
         # Parse args once to find version
         parser = self.get_base_parser()
+        # self.register_auth_arguments(parser, argv)
         (options, args) = parser.parse_known_args(argv)
 
         # build available subcommands based on version
         api_version = options.os_identity_api_version
         subcommand_parser = self.get_subcommand_parser(api_version)
+        self.register_auth_arguments(subcommand_parser, argv)
         self.parser = subcommand_parser
 
         # Handle top-level --help/-h before attempting to parse
@@ -352,7 +301,7 @@ class OpenStackIdentityShell(object):
         # TODO(heckj): supporting backwards compatibility with environment
         # variables. To be removed after DEVSTACK is updated, ideally in
         # the Grizzly release cycle.
-        args.os_token = args.os_token or env('SERVICE_TOKEN')
+        args.token = args.token or env('SERVICE_TOKEN')
         args.os_endpoint = args.os_endpoint or env('SERVICE_ENDPOINT')
 
         if utils.isunauthenticated(args.func):
@@ -363,29 +312,18 @@ class OpenStackIdentityShell(object):
                                                  insecure=args.insecure,
                                                  timeout=args.timeout)
         else:
-            self.auth_check(args)
-            token = None
-            if args.os_token and args.os_endpoint:
-                token = args.os_token
+            auth_plugin = auth.load_from_argparse_arguments(args)
+            sess = session.Session.load_from_cli_options(args,
+                                                         auth=auth_plugin)
+
             api_version = options.os_identity_api_version
             self.cs = self.get_api_class(api_version)(
-                username=args.os_username,
-                tenant_name=args.os_tenant_name,
-                tenant_id=args.os_tenant_id,
-                token=token,
-                endpoint=args.os_endpoint,
-                password=args.os_password,
-                auth_url=args.os_auth_url,
-                region_name=args.os_region_name,
-                cacert=args.os_cacert,
-                key=args.os_key,
-                cert=args.os_cert,
-                insecure=args.insecure,
-                debug=args.debug,
-                use_keyring=args.os_cache,
-                force_new_token=args.force_new_token,
-                stale_duration=args.stale_duration,
-                timeout=args.timeout)
+                session=sess,
+                region_name=args.os_region_name)
+
+                # use_keyring=args.os_cache,
+                # force_new_token=args.force_new_token,
+                # stale_duration=args.stale_duration,
 
         try:
             args.func(self.cs, args)
@@ -457,12 +395,12 @@ class OpenStackHelpFormatter(argparse.HelpFormatter):
 
 
 def main():
-    try:
-        OpenStackIdentityShell().main(sys.argv[1:])
-
-    except Exception as e:
-        print(strutils.safe_encode(six.text_type(e)), file=sys.stderr)
-        sys.exit(1)
+    # try:
+    OpenStackIdentityShell().main(sys.argv[1:])
+#
+#     except Exception as e:
+#         print(strutils.safe_encode(six.text_type(e)), file=sys.stderr)
+#         sys.exit(1)
 
 
 if __name__ == "__main__":

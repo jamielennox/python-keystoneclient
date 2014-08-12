@@ -209,3 +209,33 @@ class BaseAuthPlugin(object):
             kwargs.setdefault(opt.dest, val)
 
         return cls.load_from_options(**kwargs)
+
+
+@six.add_metaclass(abc.ABCMeta)
+class ProxyBasePlugin(BaseAuthPlugin):
+
+    def __init__(self, *args, **kwargs):
+        super(ProxyBasePlugin, self).__init__(*args, **kwargs)
+        self._plugin = None
+
+    @abc.abstractmethod
+    def create_plugin(self, session):
+        return None
+
+    def _get_plugin(self, session):
+        if not self._plugin:
+            self._plugin = self.create_plugin(session)
+
+        return self._plugin
+
+    def get_token(self, session, **kwargs):
+        return self._get_plugin(session).get_token(session, **kwargs)
+
+    def get_endpoint(self, session, **kwargs):
+        return self._get_plugin(session).get_endpoint(session, **kwargs)
+
+    def invalidate(self):
+        if self._plugin:
+            return self._plugin.invalidate()
+
+        return super(ProxyBasePlugin, self).invalidate()
