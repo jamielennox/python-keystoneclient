@@ -13,8 +13,24 @@
 import argparse
 import uuid
 
+import mock
+from oslo.config import cfg
+
+from keystoneclient.auth import base
 from keystoneclient.auth import cli
 from keystoneclient.tests.auth import utils
+
+
+class TesterPlugin(base.BaseAuthPlugin):
+
+    def get_token(self, *args, **kwargs):
+        return None
+
+    @classmethod
+    def get_options(cls):
+        return [
+            cfg.StrOpt('test1', help='tester', deprecated_name='test2')
+        ]
 
 
 class CliTests(utils.TestCase):
@@ -83,3 +99,37 @@ class CliTests(utils.TestCase):
 
         self.assertEqual(self.a_float, a['a_float'])
         self.assertEqual(3, a['a_int'])
+
+    def test_deprecated_cli_options(self):
+        TesterPlugin.register_argparse_arguments(self.p)
+        val = uuid.uuid4().hex
+        opts = self.p.parse_args(['--os-test2', val])
+        self.assertEqual(val, opts.os_test1)
+
+    def test_deprecated_multi_cli_options(self):
+        TesterPlugin.register_argparse_arguments(self.p)
+        val1 = uuid.uuid4().hex
+        val2 = uuid.uuid4().hex
+        # argarse rules say that the last specified wins.
+        opts = self.p.parse_args(['--os-test2', val2, '--os-test1', val1])
+        self.assertEqual(val1, opts.os_test1)
+
+    def test_deprecated_env_options(self):
+        val = uuid.uuid4().hex
+
+        with mock.patch.dict('os.environ', {'OS_TEST2': val}):
+            TesterPlugin.register_argparse_arguments(self.p)
+
+        opts = self.p.parse_args([])
+        self.assertEqual(val, opts.os_test1)
+
+    def test_deprecated_env_multi_options(self):
+        val1 = uuid.uuid4().hex
+        val2 = uuid.uuid4().hex
+
+        with mock.patch.dict('os.environ', {'OS_TEST1': val1,
+                                            'OS_TEST2': val2}):
+            TesterPlugin.register_argparse_arguments(self.p)
+
+        opts = self.p.parse_args([])
+        self.assertEqual(val1, opts.os_test1)
