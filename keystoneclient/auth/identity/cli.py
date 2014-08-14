@@ -13,10 +13,13 @@
 import getpass
 import sys
 
+from oslo.config import cfg
+
 from keystoneclient.auth import base as auth_base
 from keystoneclient.auth.identity.generic import base as generic_base
 from keystoneclient.auth.identity.generic import password
 from keystoneclient.auth.identity.generic import token
+from keystoneclient.auth import token_endpoint
 from keystoneclient import exceptions
 
 
@@ -38,6 +41,7 @@ class Cli(auth_base.ProxyBasePlugin):
         self._user_domain_name = kwargs.pop('user_domain_name', None)
         self._password = kwargs.pop('password', None)
 
+        self._endpoint = kwargs.pop('endpoint', None)
         self._token = kwargs.pop('token', None)
 
         self._params = {}
@@ -54,8 +58,15 @@ class Cli(auth_base.ProxyBasePlugin):
         self._plugin = None
 
     def create_plugin(self, session):
+        if self._endpoint:
+            if not self._token:
+                msg = 'endpoint requires token'
+                raise exceptions.AuthorizationFailure(msg)
+
+            return token_endpoint.Token(self._endpoint, self._token)
+
         if not self._auth_url:
-            raise Exception()
+            raise exceptions.AuthorizationFailure('auth_url missing')
 
         has_username = any([self._username,
                             self._user_domain_id,
@@ -90,6 +101,34 @@ class Cli(auth_base.ProxyBasePlugin):
 
         raise exceptions.DiscoveryFailure('Expecting an authentication method')
 
+    @property
+    def user_id(self):
+        try:
+            return self._plugin.auth_ref.user_id
+        except AttributeError:
+            pass
+
+        try:
+            return self._plugin.user_id
+        except AttributeError:
+            pass
+
+        return None
+
+    @property
+    def project_id(self):
+        try:
+            return self._plugin.auth_ref.project_id
+        except AttributeError:
+            pass
+
+        try:
+            return self._plugin.project_id
+        except AttributeError:
+            pass
+
+        return None
+
     @classmethod
     def get_options(cls):
         options = super(Cli, cls).get_options()
@@ -97,5 +136,10 @@ class Cli(auth_base.ProxyBasePlugin):
         options.extend(generic_base.get_options())
         options.extend(password.get_options())
         options.extend(token.get_options())
+
+        options.extend([
+            cfg.StrOpt('endpoint',
+                       help='The endpoint that will always be used'),
+        ])
 
         return options

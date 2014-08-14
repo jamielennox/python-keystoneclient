@@ -102,6 +102,28 @@ class _KeystoneAdapter(adapter.LegacyJsonAdapter):
         return None
 
     @property
+    def project_id(self):
+        """Best effort to retrieve the user_id from the plugin.
+
+        The shell relies on being able to retrieve the current authenticated
+        project_id from the token.
+        """
+        # the identity plugin case and the authenticated HTTPClient case
+        try:
+            return self.session.auth.auth_ref.project_id
+        except AttributeError:
+            pass
+
+        # the case that is tested by our unit tests where you just set user_id
+        # on an otherwise unauthenticated client and expect that to work.
+        try:
+            return self.session.auth.project_id
+        except AttributeError:
+            pass
+
+        return None
+
+    @property
     def auth_url(self):
         """Provide the auth_url to managers.
 
@@ -568,10 +590,7 @@ class HTTPClient(baseclient.Client, base.BaseAuthPlugin):
                 "Token didn't provide user_id")
 
         self.user_id = self.auth_ref.user_id
-
         self.auth_domain_id = self.auth_ref.domain_id
-        self.auth_tenant_id = self.auth_ref.tenant_id
-        self.auth_user_id = self.auth_ref.user_id
 
     @property
     def management_url(self):
@@ -659,7 +678,9 @@ class HTTPClient(baseclient.Client, base.BaseAuthPlugin):
                                     'timeout': None,
                                     'verify_cert': 'verify'}
 
-    deprecated_adapter_variables = {'region_name': None}
+    deprecated_adapter_variables = {'region_name': None,
+                                    'auth_user_id': 'user_id',
+                                    'auth_tenant_id': 'project_id'}
 
     def __getattr__(self, name):
         # FIXME(jamielennox): provide a proper deprecated warning

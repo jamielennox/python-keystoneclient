@@ -95,7 +95,8 @@ class BaseGenericPlugin(base.BaseIdentityPlugin):
         plugin = None
 
         try:
-            disc = self.get_discovery(session, self.auth_url)
+            disc = self.get_discovery(session, self.auth_url,
+                                      authenticated=False)
         except (exceptions.DiscoveryFailure,
                 exceptions.HTTPError,
                 exceptions.ConnectionError):

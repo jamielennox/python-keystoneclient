@@ -172,6 +172,7 @@ def do_password_update(kc, args):
         if passwd1 == passwd2:
             newpasswd = passwd1
 
+    kc.session.get_token()
     kc.users.update_own_password(currentpasswd, newpasswd)
 
     if args.os_password != newpasswd:
@@ -367,6 +368,7 @@ def do_user_role_list(kc, args):
         tenant_id = args.tenant_id
     else:
         # use the authenticated tenant id as a default
+        kc.session.get_token()
         tenant_id = kc.auth_tenant_id
 
     if args.user:
@@ -375,6 +377,7 @@ def do_user_role_list(kc, args):
         user_id = args.user_id
     else:
         # use the authenticated user id as a default
+        kc.session.get_token()
         user_id = kc.auth_user_id
     roles = kc.roles.roles_for_user(user=user_id, tenant=tenant_id)
 
@@ -399,9 +402,11 @@ def do_ec2_credentials_create(kc, args):
     """Create EC2-compatible credentials for user per tenant."""
     if not args.tenant_id:
         # use the authenticated tenant id as a default
+        kc.session.get_token()
         args.tenant_id = kc.auth_tenant_id
     if not args.user_id:
         # use the authenticated user id as a default
+        kc.session.get_token()
         args.user_id = kc.auth_user_id
     credentials = kc.ec2.create(args.user_id, args.tenant_id)
     utils.print_dict(credentials._info)
@@ -415,6 +420,7 @@ def do_ec2_credentials_get(kc, args):
     """Display EC2-compatible credentials."""
     if not args.user_id:
         # use the authenticated user id as a default
+        kc.session.get_token()
         args.user_id = kc.auth_user_id
     cred = kc.ec2.get(args.user_id, args.access)
     if cred:
@@ -427,6 +433,7 @@ def do_ec2_credentials_list(kc, args):
     """List EC2-compatible credentials for a user."""
     if not args.user_id:
         # use the authenticated user id as a default
+        kc.session.get_token()
         args.user_id = kc.auth_user_id
     credentials = kc.ec2.list(args.user_id)
     for cred in credentials:
@@ -447,6 +454,7 @@ def do_ec2_credentials_delete(kc, args):
     """Delete EC2-compatible credentials."""
     if not args.user_id:
         # use the authenticated user id as a default
+        kc.session.get_token()
         args.user_id = kc.auth_user_id
     try:
         kc.ec2.delete(args.user_id, args.access)

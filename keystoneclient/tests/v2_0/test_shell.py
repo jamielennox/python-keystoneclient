@@ -55,6 +55,12 @@ class ShellTests(utils.TestCase):
         svc.add_endpoint(public=DEFAULT_AUTH_URL,
                          admin=DEFAULT_ADMIN_URL)
 
+        auth_disc = {'version': fixture.V2Discovery(DEFAULT_AUTH_URL)}
+        self.stub_url('GET', base_url=DEFAULT_AUTH_URL, json=auth_disc)
+
+        admin_disc = {'version': fixture.V2Discovery(DEFAULT_ADMIN_URL)}
+        self.stub_url('GET', base_url=DEFAULT_ADMIN_URL, json=admin_disc)
+
         self.stub_auth(json=self.token, base_url=DEFAULT_AUTH_URL)
 
     def tearDown(self):

@@ -114,13 +114,13 @@ class OpenStackIdentityShell(object):
         #                          'with username & password). '
         #                          'Defaults to env[OS_SERVICE_TOKEN].')
 
-        parser.add_argument('--os-endpoint',
-                            metavar='<service-endpoint>',
-                            default=env('OS_SERVICE_ENDPOINT'),
-                            help='Specify an endpoint to use instead of '
-                                 'retrieving one from the service catalog '
-                                 '(via authentication). '
-                                 'Defaults to env[OS_SERVICE_ENDPOINT].')
+        # parser.add_argument('--os-endpoint',
+        #                     metavar='<service-endpoint>',
+        #                     default=env('OS_SERVICE_ENDPOINT'),
+        #                     help='Specify an endpoint to use instead of '
+        #                          'retrieving one from the service catalog '
+        #                          '(via authentication). '
+        #                          'Defaults to env[OS_SERVICE_ENDPOINT].')
 
         parser.add_argument('--os-cache',
                             default=env('OS_CACHE', default=False),
@@ -301,7 +301,7 @@ class OpenStackIdentityShell(object):
         # TODO(heckj): supporting backwards compatibility with environment
         # variables. To be removed after DEVSTACK is updated, ideally in
         # the Grizzly release cycle.
-        args.token = args.token or env('SERVICE_TOKEN')
+        args.os_token = args.os_token or env('SERVICE_TOKEN')
         args.os_endpoint = args.os_endpoint or env('SERVICE_ENDPOINT')
 
         if utils.isunauthenticated(args.func):
@@ -395,12 +395,11 @@ class OpenStackHelpFormatter(argparse.HelpFormatter):
 
 
 def main():
-    # try:
-    OpenStackIdentityShell().main(sys.argv[1:])
-#
-#     except Exception as e:
-#         print(strutils.safe_encode(six.text_type(e)), file=sys.stderr)
-#         sys.exit(1)
+    try:
+        OpenStackIdentityShell().main(sys.argv[1:])
+    except Exception as e:
+        print(strutils.safe_encode(six.text_type(e)), file=sys.stderr)
+        sys.exit(1)
 
 
 if __name__ == "__main__":
