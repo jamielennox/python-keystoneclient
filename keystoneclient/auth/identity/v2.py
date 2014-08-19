@@ -62,9 +62,7 @@ class Auth(base.BaseIdentityPlugin):
         self.tenant_id = tenant_id
         self.tenant_name = tenant_name
 
-    def get_auth_ref(self, session, **kwargs):
-        headers = {'Accept': 'application/json'}
-        url = self.auth_url.rstrip('/') + '/tokens'
+    def _get_auth_data(self):
         params = {'auth': self.get_auth_data(headers)}
 
         if self.tenant_id:
@@ -73,6 +71,13 @@ class Auth(base.BaseIdentityPlugin):
             params['auth']['tenantName'] = self.tenant_name
         if self.trust_id:
             params['auth']['trust_id'] = self.trust_id
+
+        return params
+
+    def get_auth_ref(self, session, **kwargs):
+        headers = {'Accept': 'application/json'}
+        url = self.auth_url.rstrip('/') + '/tokens'
+        params = self._get_auth_data()
 
         _logger.debug('Making authentication request to %s', url)
         resp = session.post(url, json=params, headers=headers,
@@ -93,6 +98,11 @@ class Auth(base.BaseIdentityPlugin):
                              request if a plugin needs to add to them.
         :return dict: A dict of authentication data for the auth type.
         """
+
+    def get_cache_key(self):
+        data = self._get_auth_data()
+        json = jsonutils.dumps(data, sort_keys=True)
+        return hashlib.sha256(json).hexdigest
 
 
 class Password(Auth):

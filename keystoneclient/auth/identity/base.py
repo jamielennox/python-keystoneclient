@@ -264,3 +264,6 @@ class BaseIdentityPlugin(base.BaseAuthPlugin):
         options = super(BaseIdentityPlugin, cls).get_options()
         options.extend(get_options())
         return options
+
+    def get_cache_elements(self):
+        return {'auth_url': self.auth_url}

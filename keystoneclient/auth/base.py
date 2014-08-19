@@ -210,6 +210,18 @@ class BaseAuthPlugin(object):
 
         return cls.load_from_options(**kwargs)
 
+    def get_cache_key(self):
+        """A unique way to identity the information in this plugin.
+
+        For CLI and other purposes we may need a way to identity a cached
+        plugin store.
+
+        If it returns None then caching should not be used on this plugin.
+
+        :returns str: A string identifier of the contents or None.
+        """
+        return None
+
 
 @six.add_metaclass(abc.ABCMeta)
 class ProxyBasePlugin(BaseAuthPlugin):

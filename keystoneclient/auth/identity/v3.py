@@ -11,6 +11,7 @@
 # under the License.
 
 import abc
+import hashlib
 import logging
 
 from oslo.config import cfg
@@ -19,6 +20,7 @@ import six
 from keystoneclient import access
 from keystoneclient.auth.identity import base
 from keystoneclient import exceptions
+from keystoneclient.openstack.common import jsonutils
 from keystoneclient import utils
 
 _logger = logging.getLogger(__name__)
@@ -69,8 +71,7 @@ class Auth(base.BaseIdentityPlugin):
         """The full URL where we will send authentication data."""
         return '%s/auth/tokens' % self.auth_url.rstrip('/')
 
-    def get_auth_ref(self, session, **kwargs):
-        headers = {'Accept': 'application/json'}
+    def _get_auth_data(self):
         body = {'auth': {'identity': {}}}
         ident = body['auth']['identity']
 
@@ -110,6 +111,12 @@ class Auth(base.BaseIdentityPlugin):
         elif self.trust_id:
             body['auth']['scope'] = {'OS-TRUST:trust': {'id': self.trust_id}}
 
+        return body
+
+    def get_auth_ref(self, session, **kwargs):
+        headers = {'Accept': 'application/json'}
+        body = self._get_auth_data()
+
         _logger.debug('Making authentication request to %s', self.token_url)
         resp = session.post(self.token_url, json=body, headers=headers,
                             authenticated=False, log=False)
@@ -139,6 +146,11 @@ class Auth(base.BaseIdentityPlugin):
         ])
 
         return options
+
+    def get_cache_key(self):
+        data = self._get_auth_data()
+        json = jsonutils.dumps(data, sort_keys=True)
+        return hashlib.sha256(json).hexdigest
 
 
 @six.add_metaclass(abc.ABCMeta)
