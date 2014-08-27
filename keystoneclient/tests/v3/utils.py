@@ -15,8 +15,8 @@ import uuid
 import six
 from six.moves.urllib import parse as urlparse
 
+from keystoneclient.tests import client_fixtures
 from keystoneclient.tests import utils
-from keystoneclient.v3 import client
 
 
 TestResponse = utils.TestResponse
@@ -46,6 +46,11 @@ class UnauthenticatedTestCase(utils.TestCase):
 
 
 class TestCase(UnauthenticatedTestCase):
+
+    scenarios = [
+        ('original', {'client_fixture_class': client_fixtures.V3}),
+        ('session', {'client_fixture_class': client_fixtures.SessionV3})
+    ]
 
     TEST_ADMIN_IDENTITY_ENDPOINT = "http://127.0.0.1:35357/v3"
 
@@ -126,14 +131,6 @@ class TestCase(UnauthenticatedTestCase):
         }],
         "type": "object-store"
     }]
-
-    def setUp(self):
-        super(TestCase, self).setUp()
-        self.client = client.Client(username=self.TEST_USER,
-                                    token=self.TEST_TOKEN,
-                                    tenant_name=self.TEST_TENANT_NAME,
-                                    auth_url=self.TEST_URL,
-                                    endpoint=self.TEST_URL)
 
     def stub_auth(self, subject_token=None, **kwargs):
         if not subject_token:

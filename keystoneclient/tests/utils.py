@@ -22,12 +22,16 @@ import requests
 from requests_mock.contrib import fixture
 import six
 from six.moves.urllib import parse as urlparse
+import testscenarios
 import testtools
 
 from keystoneclient.openstack.common import jsonutils
 
 
-class TestCase(testtools.TestCase):
+class TestCase(testscenarios.WithScenarios, testtools.TestCase):
+
+    client_fixture_class = None
+    data_fixture_class = None
 
     TEST_DOMAIN_ID = '1'
     TEST_DOMAIN_NAME = 'aDomain'
@@ -38,7 +42,7 @@ class TestCase(testtools.TestCase):
     TEST_TOKEN = 'aToken'
     TEST_TRUST_ID = 'aTrust'
     TEST_USER = 'test'
-    TEST_USER_ID = uuid.uuid4().hex
+    TEST_USER_ID = None
 
     TEST_ROOT_URL = 'http://127.0.0.1:5000/'
 
@@ -50,6 +54,20 @@ class TestCase(testtools.TestCase):
         self.time_patcher.start()
 
         self.requests = self.useFixture(fixture.Fixture())
+
+        self.data_fixture = None
+        self.client_fixture = None
+        self.client = None
+
+        if self.client_fixture_class:
+            fix = self.client_fixture_class(self.requests)
+            self.client_fixture = self.useFixture(fix)
+            self.client = self.client_fixture.client
+            self.TEST_USER_ID = self.client_fixture.user_id
+
+        if self.data_fixture_class:
+            fix = self.data_fixture_class(self.requests)
+            self.data_fixture = self.useFixture(fix)
 
     def tearDown(self):
         self.time_patcher.stop()

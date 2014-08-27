@@ -13,22 +13,116 @@
 # under the License.
 
 import os
+import uuid
 
 import fixtures
 import six
 import testresources
 
+from keystoneclient.auth.identity import v2
+from keystoneclient.auth.identity import v3
 from keystoneclient.common import cms
+from keystoneclient import fixture
 from keystoneclient.openstack.common import jsonutils
 from keystoneclient.openstack.common import timeutils
+from keystoneclient import session
 from keystoneclient import utils
+from keystoneclient.v2_0 import client as v2_client
+from keystoneclient.v3 import client as v3_client
 
+
+TEST_ROOT_URL = 'http://127.0.0.1:5000/'
 
 TESTDIR = os.path.dirname(os.path.abspath(__file__))
 ROOTDIR = os.path.normpath(os.path.join(TESTDIR, '..', '..'))
 CERTDIR = os.path.join(ROOTDIR, 'examples', 'pki', 'certs')
 CMSDIR = os.path.join(ROOTDIR, 'examples', 'pki', 'cms')
 KEYDIR = os.path.join(ROOTDIR, 'examples', 'pki', 'private')
+
+
+class BaseFixture(fixtures.Fixture):
+
+    TEST_ROOT_URL = TEST_ROOT_URL
+
+    def __init__(self, requests):
+        super(BaseFixture, self).__init__()
+        self.requests = requests
+        self.user_id = uuid.uuid4().hex
+        self.client = self.new_client()
+
+
+class V2(BaseFixture):
+
+    TEST_URL = '%s%s' % (TEST_ROOT_URL, 'v2.0')
+
+    def new_client(self):
+        return v2_client.Client(username=uuid.uuid4().hex,
+                                user_id=self.user_id,
+                                token=uuid.uuid4().hex,
+                                tenant_name=uuid.uuid4().hex,
+                                auth_url=self.TEST_URL,
+                                endpoint=self.TEST_URL)
+
+
+class SessionV2(V2):
+
+    def new_client(self):
+        t = fixture.V2Token(user_id=self.user_id)
+        t.set_scope()
+
+        s = t.add_service('identity')
+        s.add_endpoint(self.TEST_URL)
+
+        d = fixture.V2Discovery(self.TEST_URL)
+
+        self.requests.register_uri('POST', self.TEST_URL + '/tokens', json=t)
+        self.requests.register_uri('GET', self.TEST_URL, json={'version': d})
+
+        a = v2.Password(username=uuid.uuid4().hex,
+                        password=uuid.uuid4().hex,
+                        auth_url=self.TEST_URL)
+        s = session.Session(auth=a)
+        return v2_client.Client(session=s)
+
+
+class V3(BaseFixture):
+
+    TEST_URL = '%s%s' % (TEST_ROOT_URL, 'v3')
+
+    def new_client(self):
+        return v3_client.Client(username=uuid.uuid4().hex,
+                                user_id=self.user_id,
+                                token=uuid.uuid4().hex,
+                                tenant_name=uuid.uuid4().hex,
+                                auth_url=self.TEST_URL,
+                                endpoint=self.TEST_URL)
+
+
+class SessionV3(V3):
+
+    def new_client(self):
+        t = fixture.V3Token(user_id=self.user_id)
+        t.set_project_scope()
+
+        s = t.add_service('identity')
+        s.add_standard_endpoints(public=self.TEST_URL,
+                                 admin=self.TEST_URL)
+
+        d = fixture.V3Discovery(self.TEST_URL)
+
+        headers = {'X-Subject-Token': uuid.uuid4().hex}
+        self.requests.register_uri('POST',
+                                   self.TEST_URL + '/auth/tokens',
+                                   headers=headers,
+                                   json=t)
+        self.requests.register_uri('GET', self.TEST_URL, json={'version': d})
+
+        a = v3.Password(username=uuid.uuid4().hex,
+                        password=uuid.uuid4().hex,
+                        user_domain_id=uuid.uuid4().hex,
+                        auth_url=self.TEST_URL)
+        s = session.Session(auth=a)
+        return v3_client.Client(session=s)
 
 
 def _hash_signed_token_safe(signed_text, **kwargs):
