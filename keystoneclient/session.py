@@ -114,9 +114,7 @@ class Session(object):
         if user_agent is not None:
             self.user_agent = user_agent
 
-    @utils.positional()
-    def _http_log_request(self, url, method=None, data=None,
-                          json=None, headers=None):
+    def _http_log_request(self, request):
         if not _logger.isEnabledFor(logging.DEBUG):
             # NOTE(morganfainberg): This whole debug section is expensive,
             # there is no need to do the work if we're not going to emit a
@@ -137,18 +135,16 @@ class Session(object):
         if self.verify is False:
             string_parts.append('--insecure')
 
-        if method:
-            string_parts.extend(['-X', method])
+        if request.method:
+            string_parts.extend(['-X', request.method])
 
-        string_parts.append(url)
+        string_parts.append(request.url)
 
-        if headers:
-            for header in six.iteritems(headers):
+        if request.headers:
+            for header in six.iteritems(request.headers):
                 string_parts.append('-H "%s: %s"' % process_header(header))
-        if json:
-            data = jsonutils.dumps(json)
-        if data:
-            string_parts.append("-d '%s'" % data)
+        if request.data:
+            string_parts.append("-d '%s'" % request.data)
 
         _logger.debug(' '.join(string_parts))
 
@@ -246,40 +242,10 @@ class Session(object):
         :returns: The response to the request.
         """
 
-        headers = kwargs.setdefault('headers', dict())
-
-        if authenticated is None:
-            authenticated = bool(auth or self.auth)
-
-        if authenticated:
-            token = self.get_token(auth)
-
-            if not token:
-                raise exceptions.AuthorizationFailure("No token Available")
-
-            headers['X-Auth-Token'] = token
+        headers = kwargs.pop('headers', dict())
 
         if osprofiler_web:
             headers.update(osprofiler_web.get_trace_id_headers())
-
-        # if we are passed a fully qualified URL and an endpoint_filter we
-        # should ignore the filter. This will make it easier for clients who
-        # want to overrule the default endpoint_filter data added to all client
-        # requests. We check fully qualified here by the presence of a host.
-        url_data = urllib.parse.urlparse(url)
-        if endpoint_filter and not url_data.netloc:
-            base_url = self.get_endpoint(auth, **endpoint_filter)
-
-            if not base_url:
-                raise exceptions.EndpointNotFound()
-
-            url = '%s/%s' % (base_url.rstrip('/'), url.lstrip('/'))
-
-        if self.cert:
-            kwargs.setdefault('cert', self.cert)
-
-        if self.timeout is not None:
-            kwargs.setdefault('timeout', self.timeout)
 
         if user_agent:
             headers['User-Agent'] = user_agent
@@ -296,15 +262,49 @@ class Session(object):
             headers['Content-Type'] = 'application/json'
             kwargs['data'] = jsonutils.dumps(json)
 
+        request = requests.Request(method=method,
+                                   url=url,
+                                   headers=headers,
+                                   files=kwargs.pop('files', None),
+                                   data=kwargs.pop('data', None),
+                                   params=kwargs.pop('params', None),
+                                   cookies=kwargs.pop('cookies', None),
+                                   auth=requests_auth)
+
+        if authenticated is None:
+            authenticated = bool(auth or self.auth)
+
+        if authenticated:
+            did_something = self.authenticate_request(request, auth)
+
+            if not did_something:
+                msg = "No authentication Available"
+                raise exceptions.AuthorizationFailure(msg)
+
+        # if we are passed a fully qualified URL and an endpoint_filter we
+        # should ignore the filter. This will make it easier for clients who
+        # want to overrule the default endpoint_filter data added to all client
+        # requests. We check fully qualified here by the presence of a host.
+        url_data = urllib.parse.urlparse(request.url)
+        if endpoint_filter and not url_data.netloc:
+            base_url = self.get_endpoint(auth, **endpoint_filter)
+
+            if not base_url:
+                raise exceptions.EndpointNotFound()
+
+            request.url = '%s/%s' % (base_url.rstrip('/'),
+                                     request.url.lstrip('/'))
+
+        if self.cert:
+            kwargs.setdefault('cert', self.cert)
+
+        if self.timeout is not None:
+            kwargs.setdefault('timeout', self.timeout)
+
         kwargs.setdefault('verify', self.verify)
 
-        if requests_auth:
-            kwargs['auth'] = requests_auth
-
         if log:
-            self._http_log_request(url, method=method,
-                                   data=kwargs.get('data'),
-                                   headers=headers)
+            self._http_log_request(request)
 
         # Force disable requests redirect handling. We will manage this below.
         kwargs['allow_redirects'] = False
@@ -312,17 +312,14 @@ class Session(object):
         if redirect is None:
             redirect = self.redirect
 
-        resp = self._send_request(url, method, redirect, log, **kwargs)
+        resp = self._send_request(request, redirect, log, **kwargs)
 
         # handle getting a 401 Unauthorized response by invalidating the plugin
         # and then retrying the request. This is only tried once.
         if resp.status_code == 401 and authenticated and allow_reauth:
             if self.invalidate(auth):
-                token = self.get_token(auth)
-                if token:
-                    headers['X-Auth-Token'] = token
-                    resp = self._send_request(url, method, redirect, log,
-                                              **kwargs)
+                if self.authenticate_request(request):
+                    resp = self._send_request(request, redirect, log, **kwargs)
 
         if raise_exc and resp.status_code >= 400:
             _logger.debug('Request returned failure status: %s',
@@ -331,14 +328,15 @@ class Session(object):
 
         return resp
 
-    def _send_request(self, url, method, redirect, log, **kwargs):
+    def _send_request(self, request, redirect, log, **kwargs):
         # NOTE(jamielennox): We handle redirection manually because the
         # requests lib follows some browser patterns where it will redirect
         # POSTs as GETs for certain statuses which is not want we want for an
         # API. See: https://en.wikipedia.org/wiki/Post/Redirect/Get
+        prepped = self.session.prepare_request(request)
 
         try:
-            resp = self.session.request(method, url, **kwargs)
+            resp = self.session.send(prepped, **kwargs)
         except requests.exceptions.SSLError:
             msg = 'SSL exception connecting to %s' % url
             raise exceptions.SSLError(msg)
@@ -364,14 +362,12 @@ class Session(object):
                 return resp
 
             try:
-                location = resp.headers['location']
+                request.url = resp.headers['location']
             except KeyError:
                 _logger.warn("Failed to redirect request to %s as new "
                              "location was not provided.", resp.url)
             else:
-                new_resp = self._send_request(location, method, redirect, log,
-                                              **kwargs)
-
+                new_resp = self._send_request(request, redirect, log, **kwargs)
                 if not isinstance(new_resp.history, list):
                     new_resp.history = list(new_resp.history)
                 new_resp.history.insert(0, resp)
@@ -463,6 +459,19 @@ class Session(object):
 
         try:
             return auth.get_token(self)
+        except exceptions.HttpError as exc:
+            raise exceptions.AuthorizationFailure("Authentication failure: "
+                                                  "%s" % exc)
+
+    def authenticate_request(self, request, auth=None):
+        if not auth:
+            auth = self.auth
+
+        if not auth:
+            raise exceptions.MissingAuthPlugin("Token Required")
+
+        try:
+            return auth.authenticate_request(self, request)
         except exceptions.HttpError as exc:
             raise exceptions.AuthorizationFailure("Authentication failure: "
                                                   "%s" % exc)

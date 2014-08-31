@@ -79,6 +79,26 @@ class _FakeRequestSession(object):
     session and do individual connections like we used to.
     """
 
+    def send(self, request, **kwargs):
+        if request.headers:
+            kwargs['headers'] = request.headers
+        if request.files:
+            kwargs['files'] = request.files
+        if request.data:
+            kwargs['data'] = request.data
+        if request.params:
+            kwargs['params'] = request.params
+        if request.auth:
+            kwargs['auth'] = request.auth
+        if request.cookies:
+            kwargs['cookies'] = request.cookies
+        if request.hooks:
+            kwargs['hooks'] = request.hooks
+        return requests.request(request.method, request.url, **kwargs)
+
+    def prepare_request(self, request):
+        return request
+
     def request(self, *args, **kwargs):
         return requests.request(*args, **kwargs)
 

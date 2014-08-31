@@ -102,6 +102,21 @@ class BaseAuthPlugin(object):
         """
         return False
 
+    def authenticate_request(self, session, request, **kwargs):
+        """Add information to a request that will authenticate it.
+
+        :params requests.Request: A request to authenticate. Authentication
+                                  information will be added to it.
+        :return bool: True if the auth plugin did something. False otherwise.
+        """
+        request.headers.pop('X-Auth-Token', None)
+        token = self.get_token(session)
+
+        if token:
+            request.headers['X-Auth-Token'] = token
+
+        return bool(token)
+
     @classmethod
     def get_options(cls):
         """Return the list of parameters associated with the auth plugin.

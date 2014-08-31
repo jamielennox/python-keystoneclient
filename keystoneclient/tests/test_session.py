@@ -114,14 +114,13 @@ class SessionTests(utils.TestCase):
         FAKE_RESP = utils.TestResponse({'status_code': 200, 'text': 'resp'})
         RESP = mock.Mock(return_value=FAKE_RESP)
 
-        with mock.patch.object(session.session, 'request', RESP) as mocked:
+        with mock.patch.object(session.session, 'send', RESP) as mocked:
             session.post(self.TEST_URL, data='value')
 
             mock_args, mock_kwargs = mocked.call_args
 
-            self.assertEqual(mock_args[0], 'POST')
-            self.assertEqual(mock_args[1], self.TEST_URL)
-            self.assertEqual(mock_kwargs['data'], 'value')
+            self.assertEqual(mock_args[0].method, 'POST')
+            self.assertEqual(mock_args[0].url, self.TEST_URL)
             self.assertEqual(mock_kwargs['cert'], 'cert.pem')
             self.assertEqual(mock_kwargs['verify'], 'certs')
             self.assertEqual(mock_kwargs['timeout'], 5)
@@ -456,21 +455,28 @@ class SessionAuthTests(utils.TestCase):
         self.assertFalse(fixed.get_token_called)
 
     def test_requests_auth_plugin(self):
+
+        class FakeRequestsAuth(requests.auth.AuthBase):
+
+            def __init__(self, *args, **kwargs):
+                super(FakeRequestsAuth, self).__init__(*args, **kwargs)
+                self.called = False
+
+            def __call__(self, request):
+                self.called = True
+                return request
+
         sess = client_session.Session()
+        requests_auth = FakeRequestsAuth()
+        path = 'path'
+        resp_text = uuid.uuid4().hex
 
-        requests_auth = object()
+        self.stub_url('GET', [path], text=resp_text)
 
-        FAKE_RESP = utils.TestResponse({'status_code': 200, 'text': 'resp'})
-        RESP = mock.Mock(return_value=FAKE_RESP)
+        resp = sess.get(self.TEST_URL + path, requests_auth=requests_auth)
 
-        with mock.patch.object(sess.session, 'request', RESP) as mocked:
-            sess.get(self.TEST_URL, requests_auth=requests_auth)
-
-            mocked.assert_called_once_with('GET', self.TEST_URL,
-                                           headers=mock.ANY,
-                                           allow_redirects=mock.ANY,
-                                           auth=requests_auth,
-                                           verify=mock.ANY)
+        self.assertEqual(resp_text, resp.text)
+        self.assertTrue(requests_auth.called)
 
     def test_reauth_called(self):
         auth = CalledAuthPlugin(invalidate=True)

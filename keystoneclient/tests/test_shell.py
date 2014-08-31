@@ -449,7 +449,8 @@ class ShellTest(utils.TestCase):
                                             timeout=2,
                                             allow_redirects=False,
                                             headers=mock.ANY,
-                                            verify=mock.ANY)
+                                            verify=mock.ANY,
+                                            hooks=mock.ANY)
 
     def test_do_endpoints(self):
         do_shell_mock = mock.MagicMock()
