@@ -275,12 +275,6 @@ class Session(object):
 
             url = '%s/%s' % (base_url.rstrip('/'), url.lstrip('/'))
 
-        if self.cert:
-            kwargs.setdefault('cert', self.cert)
-
-        if self.timeout is not None:
-            kwargs.setdefault('timeout', self.timeout)
-
         if user_agent:
             headers['User-Agent'] = user_agent
         elif self.user_agent:
@@ -296,7 +290,6 @@ class Session(object):
             headers['Content-Type'] = 'application/json'
             kwargs['data'] = jsonutils.dumps(json)
 
-        kwargs.setdefault('verify', self.verify)
 
         if requests_auth:
             kwargs['auth'] = requests_auth
@@ -466,6 +459,22 @@ class Session(object):
         except exceptions.HttpError as exc:
             raise exceptions.AuthorizationFailure("Authentication failure: "
                                                   "%s" % exc)
+
+    def get_send_params(self, auth=None, **kwargs):
+        if not auth:
+            auth = self.auth
+
+        auth_params = auth.get_send_params() if auth else {}
+        params = {'cert': self.cert,
+                  'timeout': self.timeout,
+                  'verify': self.verify}
+
+        for k in ['cert', 'timeout', 'verify', 'proxies']:
+            val = kwargs.get(k, auth_params.get(k))
+            if val:
+                params[k] = val
+
+        return params
 
     def get_endpoint(self, auth=None, **kwargs):
         """Get an endpoint as provided by the auth plugin.
