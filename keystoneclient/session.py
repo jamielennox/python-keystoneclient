@@ -13,6 +13,7 @@
 import argparse
 import logging
 import os
+import time
 
 from oslo.config import cfg
 import requests
@@ -184,7 +185,7 @@ class Session(object):
                 user_agent=None, redirect=None, authenticated=None,
                 endpoint_filter=None, auth=None, requests_auth=None,
                 raise_exc=True, allow_reauth=True, log=True,
-                endpoint_override=None, **kwargs):
+                endpoint_override=None, connect_retries=0, **kwargs):
         """Send an HTTP request with the specified characteristics.
 
         Wrapper around `requests.Session.request` to handle tasks such as
@@ -210,6 +211,9 @@ class Session(object):
                                   can be followed by a request. Either an
                                   integer for a specific count or True/False
                                   for forever/never. (optional)
+        :param int connect_retries: the maximum number of retries that should
+                                    be attempted for Connection Errors.
+                                    (optional) Default 0 (never retry).
         :param bool authenticated: True if a token should be attached to this
                                    request, False if not or None for attach if
                                    an auth_plugin is available.
@@ -322,7 +326,8 @@ class Session(object):
         if redirect is None:
             redirect = self.redirect
 
-        resp = self._send_request(url, method, redirect, log, **kwargs)
+        send_args = (url, method, redirect, log, connect_retries)
+        resp = self._send_request(*send_args, **kwargs)
 
         # handle getting a 401 Unauthorized response by invalidating the plugin
         # and then retrying the request. This is only tried once.
@@ -331,8 +336,7 @@ class Session(object):
                 token = self.get_token(auth)
                 if token:
                     headers['X-Auth-Token'] = token
-                    resp = self._send_request(url, method, redirect, log,
-                                              **kwargs)
+                    resp = self._send_request(*send_args, **kwargs)
 
         if raise_exc and resp.status_code >= 400:
             _logger.debug('Request returned failure status: %s',
@@ -341,11 +345,14 @@ class Session(object):
 
         return resp
 
-    def _send_request(self, url, method, redirect, log, **kwargs):
+    def _send_request(self, url, method, redirect, log, connect_retries,
+                      connect_retry_delay=0.5, **kwargs):
         # NOTE(jamielennox): We handle redirection manually because the
         # requests lib follows some browser patterns where it will redirect
         # POSTs as GETs for certain statuses which is not want we want for an
         # API. See: https://en.wikipedia.org/wiki/Post/Redirect/Get
+
+        connect_failure = None
 
         try:
             resp = self.session.request(method, url, **kwargs)
@@ -354,10 +361,24 @@ class Session(object):
             raise exceptions.SSLError(msg)
         except requests.exceptions.Timeout:
             msg = 'Request to %s timed out' % url
-            raise exceptions.RequestTimeout(msg)
+            connect_failure = exceptions.RequestTimeout(msg)
         except requests.exceptions.ConnectionError:
             msg = 'Unable to establish connection to %s' % url
-            raise exceptions.ConnectionRefused(msg)
+            connect_failure = exceptions.ConnectionRefused(msg)
+
+        if connect_failure and connect_retries > 0:
+            _logger.info("Failure: %s. Retrying in %.1fs.",
+                         connect_failure, connect_retry_delay)
+            time.sleep(connect_retry_delay)
+
+            connect_retries -= 1
+            connect_retry_delay *= 2
+            return self._send_request(url, method, redirect, log,
+                                      connect_retries,
+                                      connect_retry_delay=connect_retry_delay,
+                                      **kwargs)
+        elif connect_failure:
+            raise connect_failure
 
         if log:
             self._http_log_response(response=resp)
@@ -379,8 +400,9 @@ class Session(object):
                 _logger.warn("Failed to redirect request to %s as new "
                              "location was not provided.", resp.url)
             else:
+                kwargs['connect_retry_delay'] = connect_retry_delay
                 new_resp = self._send_request(location, method, redirect, log,
-                                              **kwargs)
+                                              connect_retries, **kwargs)
 
                 if not isinstance(new_resp.history, list):
                     new_resp.history = list(new_resp.history)
