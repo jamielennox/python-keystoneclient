@@ -38,8 +38,9 @@ class Token(base.BaseAuthPlugin):
         """
         return self.endpoint
 
-    def get_options(self):
-        options = super(Token, self).get_options()
+    @classmethod
+    def get_options(cls):
+        options = super(Token, cls).get_options()
 
         options.extend([
             cfg.StrOpt('endpoint',
