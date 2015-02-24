@@ -17,12 +17,8 @@
 import os
 import re
 
-from oslo_config import config
 from tempest_lib.cli import base
 from tempest_lib import exceptions
-
-
-CONF = config.CONF
 
 
 class SimpleReadOnlyKeystoneClientTest(base.ClientTestBase):
@@ -144,4 +140,4 @@ class SimpleReadOnlyKeystoneClientTest(base.ClientTestBase):
         self.keystone('catalog', flags='--debug')
 
     def test_admin_timeout(self):
-        self.keystone('catalog', flags='--timeout %d' % CONF.cli.timeout)
+        self.keystone('catalog', flags='--timeout %d' % 5)
