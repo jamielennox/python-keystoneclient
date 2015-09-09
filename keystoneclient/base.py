@@ -24,11 +24,12 @@ import copy
 import functools
 import warnings
 
+from keystoneauth1 import exceptions as ksa_exceptions
+from keystoneauth1 import plugin
 from oslo_utils import strutils
 import six
 from six.moves import urllib
 
-from keystoneclient import auth
 from keystoneclient import exceptions
 from keystoneclient.i18n import _
 
@@ -256,7 +257,7 @@ class ManagerWithFind(Manager):
         if num == 0:
             msg = _("No %(name)s matching %(kwargs)s.") % {
                 'name': self.resource_class.__name__, 'kwargs': kwargs}
-            raise exceptions.NotFound(404, msg)
+            raise ksa_exceptions.NotFound(404, msg)
         elif num > 1:
             raise exceptions.NoUniqueMatch
         else:
@@ -386,12 +387,12 @@ class CrudManager(Manager):
             return self._list(
                 url_query,
                 self.collection_key)
-        except exceptions.EmptyCatalog:
+        except ksa_exceptions.EmptyCatalog:
             if fallback_to_auth:
                 return self._list(
                     url_query,
                     self.collection_key,
-                    endpoint_filter={'interface': auth.AUTH_INTERFACE})
+                    endpoint_filter={'interface': plugin.AUTH_INTERFACE})
             else:
                 raise
 
@@ -433,7 +434,7 @@ class CrudManager(Manager):
         if num == 0:
             msg = _("No %(name)s matching %(kwargs)s.") % {
                 'name': self.resource_class.__name__, 'kwargs': kwargs}
-            raise exceptions.NotFound(404, msg)
+            raise ksa_exceptions.NotFound(404, msg)
         elif num > 1:
             raise exceptions.NoUniqueMatch
         else:

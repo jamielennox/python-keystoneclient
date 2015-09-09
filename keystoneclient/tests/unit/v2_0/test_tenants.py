@@ -12,10 +12,11 @@
 
 import uuid
 
-from keystoneclient.auth.identity import v2
-from keystoneclient import exceptions
-from keystoneclient import fixture
-from keystoneclient import session
+from keystoneauth1 import exceptions as ksa_exceptions
+from keystoneauth1.identity import v2
+from keystoneauth1 import fixture
+from keystoneauth1 import session
+
 from keystoneclient.tests.unit.v2_0 import utils
 from keystoneclient.v2_0 import client
 from keystoneclient.v2_0 import tenants
@@ -120,7 +121,7 @@ class TenantTests(utils.TestCase):
                                        req_body['tenant']['description'],
                                        req_body['tenant']['enabled'])
 
-        self.assertRaises(exceptions.Conflict, create_duplicate_tenant)
+        self.assertRaises(ksa_exceptions.Conflict, create_duplicate_tenant)
 
     def test_delete(self):
         self.stub_url('DELETE', ['tenants', self.ADMIN_ID], status_code=204)

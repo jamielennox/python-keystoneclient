@@ -12,10 +12,10 @@
 
 import uuid
 
+from keystoneauth1 import access
+from keystoneauth1 import exceptions as ksa_exceptions
 import testresources
 
-from keystoneclient import access
-from keystoneclient import exceptions
 from keystoneclient.tests.unit import client_fixtures
 from keystoneclient.tests.unit.v3 import utils
 
@@ -34,7 +34,7 @@ class TokenTests(utils.TestCase, testresources.ResourcedTestCase):
         token_id = uuid.uuid4().hex
         token_ref = self.examples.TOKEN_RESPONSES[
             self.examples.v3_UUID_TOKEN_DEFAULT]
-        token = access.AccessInfoV3(token_id, token_ref['token'])
+        token = access.create(auth_token=token_id, body=token_ref)
         self.stub_url('DELETE', ['/auth/tokens'], status_code=204)
         self.client.tokens.revoke_token(token)
         self.assertRequestHeaderEqual('X-Subject-Token', token_id)
@@ -68,7 +68,7 @@ class TokenTests(utils.TestCase, testresources.ResourcedTestCase):
         token_id = uuid.uuid4().hex
         token_ref = self.examples.TOKEN_RESPONSES[
             self.examples.v3_UUID_TOKEN_DEFAULT]
-        token = access.AccessInfoV3(token_id, token_ref['token'])
+        token = access.create(auth_token=token_id, body=token_ref)
         self.stub_url('GET', ['auth', 'tokens'],
                       headers={'X-Subject-Token': token_id, }, json=token_ref)
         access_info = self.client.tokens.validate(token)
@@ -82,9 +82,9 @@ class TokenTests(utils.TestCase, testresources.ResourcedTestCase):
         token_id = uuid.uuid4().hex
         self.stub_url('GET', ['auth', 'tokens'], status_code=404)
 
-        self.assertRaises(exceptions.NotFound,
+        self.assertRaises(ksa_exceptions.NotFound,
                           self.client.tokens.get_token_data, token_id)
-        self.assertRaises(exceptions.NotFound,
+        self.assertRaises(ksa_exceptions.NotFound,
                           self.client.tokens.validate, token_id)
 
     def test_validate_token_catalog(self):

@@ -12,11 +12,11 @@
 
 import uuid
 
+from keystoneauth1 import session
+from keystoneauth1 import token_endpoint
 import six
 from six.moves.urllib import parse as urlparse
 
-from keystoneclient.auth import token_endpoint
-from keystoneclient import session
 from keystoneclient.tests.unit import utils
 from keystoneclient.v3 import client
 

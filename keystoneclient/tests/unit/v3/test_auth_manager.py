@@ -12,9 +12,10 @@
 
 import uuid
 
-from keystoneclient.auth.identity import v3
-from keystoneclient import fixture
-from keystoneclient import session
+from keystoneauth1 import fixture
+from keystoneauth1.identity import v3
+from keystoneauth1 import session
+
 from keystoneclient.tests.unit.v3 import utils
 from keystoneclient.v3 import auth
 from keystoneclient.v3 import client

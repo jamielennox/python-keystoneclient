@@ -10,12 +10,12 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
+from keystoneauth1 import adapter
+from keystoneauth1 import session
+from keystoneauth1 import token_endpoint
 from oslotest import mockpatch
 
-from keystoneclient import adapter
-from keystoneclient.auth import token_endpoint
 from keystoneclient import base
-from keystoneclient import session
 from keystoneclient.tests.unit import utils
 from keystoneclient.v2_0 import client
 from keystoneclient.v2_0 import roles

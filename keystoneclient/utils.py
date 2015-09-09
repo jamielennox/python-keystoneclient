@@ -17,6 +17,7 @@ import inspect
 import logging
 import sys
 
+from keystoneauth1 import exceptions as ksa_exceptions
 from oslo_utils import timeutils
 import six
 
@@ -32,7 +33,7 @@ def find_resource(manager, name_or_id):
     # first try the entity as a string
     try:
         return manager.get(name_or_id)
-    except (exceptions.NotFound):
+    except (ksa_exceptions.NotFound):
         pass
 
     # finally try to find entity by name
@@ -40,7 +41,7 @@ def find_resource(manager, name_or_id):
         if isinstance(name_or_id, six.binary_type):
             name_or_id = name_or_id.decode('utf-8', 'strict')
         return manager.find(name=name_or_id)
-    except exceptions.NotFound:
+    except ksa_exceptions.NotFound:
         msg = ("No %s with a name or ID of '%s' exists." %
                (manager.resource_class.__name__.lower(), name_or_id))
         raise exceptions.CommandError(msg)

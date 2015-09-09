@@ -19,7 +19,7 @@
 OpenStack Client interface. Handles the REST calls and responses.
 """
 
-from keystoneclient import adapter
+from keystoneauth1 import adapter
 
 
 class HTTPClient(object):

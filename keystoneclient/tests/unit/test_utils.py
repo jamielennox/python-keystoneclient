@@ -12,6 +12,7 @@
 
 import logging
 
+from keystoneauth1 import exceptions as ksa_exceptions
 import six
 import testresources
 from testtools import matchers
@@ -41,7 +42,7 @@ class FakeManager(object):
         try:
             return self.resources[str(resource_id)]
         except KeyError:
-            raise exceptions.NotFound(resource_id)
+            raise ksa_exceptions.NotFound(resource_id)
 
     def find(self, name=None):
         if name == '9999':
@@ -50,7 +51,7 @@ class FakeManager(object):
         for resource_id, resource in self.resources.items():
             if resource['name'] == str(name):
                 return resource
-        raise exceptions.NotFound(name)
+        raise ksa_exceptions.NotFound(name)
 
 
 class FindResourceTestCase(test_utils.TestCase):

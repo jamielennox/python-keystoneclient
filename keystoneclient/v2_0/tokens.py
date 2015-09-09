@@ -10,10 +10,11 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-from keystoneclient import access
-from keystoneclient import auth
+from keystoneauth1 import access
+from keystoneauth1 import exceptions
+from keystoneauth1 import plugin
+
 from keystoneclient import base
-from keystoneclient import exceptions
 from keystoneclient.i18n import _
 from keystoneclient import utils
 
@@ -63,7 +64,7 @@ class TokenManager(base.Manager):
         try:
             token_ref = self._create(*args, **kwargs)
         except exceptions.EndpointNotFound:
-            kwargs['endpoint_filter'] = {'interface': auth.AUTH_INTERFACE}
+            kwargs['endpoint_filter'] = {'interface': plugin.AUTH_INTERFACE}
             token_ref = self._create(*args, **kwargs)
 
         return token_ref
@@ -113,7 +114,7 @@ class TokenManager(base.Manager):
 
         token_id = calc_id(token)
         body = self.get_token_data(token_id)
-        return access.AccessInfo.factory(auth_token=token_id, body=body)
+        return access.create(auth_token=token_id, body=body)
 
     def get_revoked(self):
         """Returns the revoked tokens response.

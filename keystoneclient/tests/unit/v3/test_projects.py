@@ -12,6 +12,8 @@
 
 import uuid
 
+from keystoneauth1 import exceptions as ksa_exceptions
+
 from keystoneclient import exceptions
 from keystoneclient.tests.unit.v3 import utils
 from keystoneclient.v3 import projects
@@ -309,5 +311,5 @@ class ProjectTests(utils.TestCase, utils.CrudTests):
 
         # NOTE(rodrigods): this is the expected behaviour of the Identity
         # server, a different implementation might not fail this request.
-        self.assertRaises(exceptions.Forbidden, self.manager.update,
+        self.assertRaises(ksa_exceptions.Forbidden, self.manager.update,
                           ref['id'], **utils.parameterize(req_ref))

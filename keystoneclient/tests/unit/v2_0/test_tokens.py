@@ -12,11 +12,12 @@
 
 import uuid
 
-from keystoneclient.auth.identity import v2
-from keystoneclient import access
-from keystoneclient import exceptions
-from keystoneclient import fixture
-from keystoneclient import session
+from keystoneauth1 import access
+from keystoneauth1 import exceptions as ksa_exceptions
+from keystoneauth1 import fixture
+from keystoneauth1.identity import v2
+from keystoneauth1 import session
+
 from keystoneclient.tests.unit.v2_0 import utils
 from keystoneclient.v2_0 import client
 from keystoneclient.v2_0 import tokens
@@ -190,9 +191,9 @@ class TokenTests(utils.TestCase):
         # The server is expected to return 404 if the token is invalid.
         self.stub_url('GET', ['tokens', id_], status_code=404)
 
-        self.assertRaises(exceptions.NotFound,
+        self.assertRaises(ksa_exceptions.NotFound,
                           self.client.tokens.get_token_data, id_)
-        self.assertRaises(exceptions.NotFound,
+        self.assertRaises(ksa_exceptions.NotFound,
                           self.client.tokens.validate, id_)
 
     def test_validate_token_access_info_with_token_id(self):
@@ -209,7 +210,7 @@ class TokenTests(utils.TestCase):
         token_id = uuid.uuid4().hex
         token_fixture = fixture.V2Token(token_id=token_id)
         self.stub_url('GET', ['tokens', token_id], json=token_fixture)
-        token = access.AccessInfo.factory(body=token_fixture)
+        token = access.create(body=token_fixture)
         access_info = self.client.tokens.validate_access_info(token)
         self.assertIsInstance(access_info, access.AccessInfoV2)
         self.assertEqual(token_id, access_info.auth_token)

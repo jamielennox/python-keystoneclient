@@ -10,7 +10,8 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-from keystoneclient import access
+from keystoneauth1 import access
+
 from keystoneclient import base
 from keystoneclient import utils
 
@@ -86,4 +87,4 @@ class TokenManager(object):
 
         token_id = _calc_id(token)
         body = self.get_token_data(token_id, include_catalog=include_catalog)
-        return access.AccessInfo.factory(auth_token=token_id, body=body)
+        return access.create(auth_token=token_id, body=body)

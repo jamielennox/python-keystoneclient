@@ -10,9 +10,10 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-from keystoneclient import auth
+from keystoneauth1 import exceptions as ksa_exceptions
+from keystoneauth1 import plugin
+
 from keystoneclient import base
-from keystoneclient import exceptions
 
 
 class Project(base.Resource):
@@ -59,8 +60,8 @@ class AuthManager(base.Manager):
             return self._list(self._PROJECTS_URL,
                               'projects',
                               obj_class=Project)
-        except exceptions.EndpointNotFound:
-            endpoint_filter = {'interface': auth.AUTH_INTERFACE}
+        except ksa_exceptions.EndpointNotFound:
+            endpoint_filter = {'interface': plugin.AUTH_INTERFACE}
             return self._list(self._PROJECTS_URL,
                               'projects',
                               obj_class=Project,
@@ -73,8 +74,8 @@ class AuthManager(base.Manager):
             return self._list(self._DOMAINS_URL,
                               'domains',
                               obj_class=Domain)
-        except exceptions.EndpointNotFound:
-            endpoint_filter = {'interface': auth.AUTH_INTERFACE}
+        except ksa_exceptions.EndpointNotFound:
+            endpoint_filter = {'interface': plugin.AUTH_INTERFACE}
             return self._list(self._DOMAINS_URL,
                               'domains',
                               obj_class=Domain,
