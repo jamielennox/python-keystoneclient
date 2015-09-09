@@ -14,8 +14,12 @@
 
 import uuid
 
+from keystoneclient.auth.identity import v3
 from keystoneclient import exceptions
+from keystoneclient import fixture
+from keystoneclient import session
 from keystoneclient.tests.unit.v3 import utils
+from keystoneclient.v3 import client
 from keystoneclient.v3 import users
 
 
@@ -236,10 +240,19 @@ class UserTests(utils.TestCase, utils.CrudTests):
         old_password = uuid.uuid4().hex
         new_password = uuid.uuid4().hex
 
+        # we need a real plugin here so we can get the user_id back
+        a = v3.Password(username=uuid.uuid4().hex,
+                        password=old_password,
+                        auth_url=self.TEST_URL)
+        s = session.Session()
+        c = client.Client(session=s, auth=a, endpoint_override=self.TEST_URL)
+
+        auth_resp = fixture.V3Token(user_id=self.TEST_USER_ID)
+
+        self.stub_auth(json=auth_resp)
         self.stub_url('POST',
                       [self.collection_key, self.TEST_USER_ID, 'password'])
-        self.client.user_id = self.TEST_USER_ID
-        self.manager.update_password(old_password, new_password)
+        c.users.update_password(old_password, new_password)
 
         exp_req_body = {
             'user': {

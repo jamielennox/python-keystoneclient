@@ -12,7 +12,10 @@
 
 from oslotest import mockpatch
 
+from keystoneclient import adapter
+from keystoneclient.auth import token_endpoint
 from keystoneclient import base
+from keystoneclient import session
 from keystoneclient.tests.unit import utils
 from keystoneclient.v2_0 import client
 from keystoneclient.v2_0 import roles
@@ -37,10 +40,10 @@ class BaseTest(utils.TestCase):
 
     def test_resource_lazy_getattr(self):
         # Creating a Client not using session is deprecated.
-        with self.deprecations.expect_deprecations_here():
-            self.client = client.Client(token=self.TEST_TOKEN,
-                                        auth_url='http://127.0.0.1:5000',
-                                        endpoint='http://127.0.0.1:5000')
+        s = session.Session()
+        a = token_endpoint.Token(token=self.TEST_TOKEN,
+                                 endpoint='http://127.0.0.1:5000')
+        self.client = client.Client(session=s, auth=a)
 
         self.useFixture(mockpatch.PatchObject(
             self.client._adapter, 'get', side_effect=AttributeError,
@@ -86,22 +89,21 @@ class ManagerTest(utils.TestCase):
     def setUp(self):
         super(ManagerTest, self).setUp()
 
-        # Creating a Client not using session is deprecated.
-        with self.deprecations.expect_deprecations_here():
-            self.client = client.Client(token=self.TEST_TOKEN,
-                                        auth_url='http://127.0.0.1:5000',
-                                        endpoint='http://127.0.0.1:5000')
+        s = session.Session()
+        a = token_endpoint.Token(token=self.TEST_TOKEN,
+                                 endpoint='http://127.0.0.1:5000')
+        self.adapter = adapter.LegacyJsonAdapter(session=s, auth=a)
 
-        self.mgr = base.Manager(self.client)
+        self.mgr = base.Manager(self.adapter)
         self.mgr.resource_class = base.Resource
 
     def test_api(self):
         with self.deprecations.expect_deprecations_here():
-            self.assertEqual(self.mgr.api, self.client)
+            self.assertEqual(self.mgr.api, self.adapter)
 
     def test_get(self):
         get_mock = self.useFixture(mockpatch.PatchObject(
-            self.client, 'get', autospec=True, return_value=(None, self.body))
+            self.adapter, 'get', autospec=True, return_value=(None, self.body))
         ).mock
         rsrc = self.mgr._get(self.url, "hello")
         get_mock.assert_called_once_with(self.url)
@@ -109,7 +111,10 @@ class ManagerTest(utils.TestCase):
 
     def test_post(self):
         post_mock = self.useFixture(mockpatch.PatchObject(
-            self.client, 'post', autospec=True, return_value=(None, self.body))
+            self.adapter,
+            'post',
+            autospec=True,
+            return_value=(None, self.body))
         ).mock
 
         rsrc = self.mgr._post(self.url, self.body, "hello")
@@ -124,7 +129,7 @@ class ManagerTest(utils.TestCase):
 
     def test_put(self):
         put_mock = self.useFixture(mockpatch.PatchObject(
-            self.client, 'put', autospec=True, return_value=(None, self.body))
+            self.adapter, 'put', autospec=True, return_value=(None, self.body))
         ).mock
 
         rsrc = self.mgr._put(self.url, self.body, "hello")
@@ -139,7 +144,7 @@ class ManagerTest(utils.TestCase):
 
     def test_patch(self):
         patch_mock = self.useFixture(mockpatch.PatchObject(
-            self.client, 'patch', autospec=True,
+            self.adapter, 'patch', autospec=True,
             return_value=(None, self.body))
         ).mock
 
@@ -155,12 +160,12 @@ class ManagerTest(utils.TestCase):
 
     def test_update(self):
         patch_mock = self.useFixture(mockpatch.PatchObject(
-            self.client, 'patch', autospec=True,
+            self.adapter, 'patch', autospec=True,
             return_value=(None, self.body))
         ).mock
 
         put_mock = self.useFixture(mockpatch.PatchObject(
-            self.client, 'put', autospec=True, return_value=(None, self.body))
+            self.adapter, 'put', autospec=True, return_value=(None, self.body))
         ).mock
 
         rsrc = self.mgr._update(

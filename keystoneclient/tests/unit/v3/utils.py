@@ -15,6 +15,8 @@ import uuid
 import six
 from six.moves.urllib import parse as urlparse
 
+from keystoneclient.auth import token_endpoint
+from keystoneclient import session
 from keystoneclient.tests.unit import utils
 from keystoneclient.v3 import client
 
@@ -130,11 +132,9 @@ class TestCase(UnauthenticatedTestCase):
     def setUp(self):
         super(TestCase, self).setUp()
 
-        # Creating a Client not using session is deprecated.
-        with self.deprecations.expect_deprecations_here():
-            self.client = client.Client(token=self.TEST_TOKEN,
-                                        auth_url=self.TEST_URL,
-                                        endpoint=self.TEST_URL)
+        s = session.Session()
+        a = token_endpoint.Token(token=self.TEST_TOKEN, endpoint=self.TEST_URL)
+        self.client = client.Client(session=s, auth=a)
 
     def stub_auth(self, subject_token=None, **kwargs):
         if not subject_token:

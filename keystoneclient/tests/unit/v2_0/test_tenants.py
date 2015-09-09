@@ -12,8 +12,10 @@
 
 import uuid
 
+from keystoneclient.auth.identity import v2
 from keystoneclient import exceptions
 from keystoneclient import fixture
+from keystoneclient import session
 from keystoneclient.tests.unit.v2_0 import utils
 from keystoneclient.v2_0 import client
 from keystoneclient.v2_0 import tenants
@@ -332,7 +334,7 @@ class TenantTests(utils.TestCase):
     def test_list_tenants_use_admin_url(self):
         self.stub_url('GET', ['tenants'], json=self.TEST_TENANTS)
 
-        self.assertEqual(self.TEST_URL, self.client.management_url)
+        self.assertEqual(self.TEST_URL, self.client._adapter.get_endpoint())
 
         tenant_list = self.client.tenants.list()
         [self.assertIsInstance(t, tenants.Tenant) for t in tenant_list]
@@ -341,23 +343,30 @@ class TenantTests(utils.TestCase):
                          len(tenant_list))
 
     def test_list_tenants_fallback_to_auth_url(self):
-        new_auth_url = 'http://keystone.test:5000/v2.0'
+        new_url = 'http://keystone.test:5000/'
+        new_v2_url = new_url + 'v2.0'
+
+        disc = fixture.DiscoveryList(href=new_url, v3=False)
+        self.stub_url('GET', base_url=new_url, json=disc)
 
         token = fixture.V2Token(token_id=self.TEST_TOKEN,
                                 user_name=self.TEST_USER,
                                 user_id=self.TEST_USER_ID)
 
-        self.stub_auth(base_url=new_auth_url, json=token)
-        self.stub_url('GET', ['tenants'], base_url=new_auth_url,
+        self.stub_auth(base_url=new_v2_url, json=token)
+        self.stub_url('GET', ['tenants'], base_url=new_v2_url,
                       json=self.TEST_TENANTS)
 
-        c = client.Client(username=self.TEST_USER,
-                          auth_url=new_auth_url,
-                          password=uuid.uuid4().hex)
+        s = session.Session()
+        a = v2.Password(username=self.TEST_USER,
+                        auth_url=new_v2_url,
+                        password=uuid.uuid4().hex)
+        c = client.Client(session=s, auth=a)
 
-        self.assertIsNone(c.management_url)
         tenant_list = c.tenants.list()
         [self.assertIsInstance(t, tenants.Tenant) for t in tenant_list]
 
         self.assertEqual(len(self.TEST_TENANTS['tenants']['values']),
                          len(tenant_list))
+        self.assertEqual(self.requests_mock.last_request.url,
+                         new_v2_url + '/tenants')

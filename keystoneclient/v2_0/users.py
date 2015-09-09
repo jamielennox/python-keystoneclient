@@ -75,7 +75,7 @@ class UserManager(base.ManagerWithFind):
         params = {"user": {"password": passwd,
                            "original_password": origpasswd}}
 
-        return self._update("/OS-KSCRUD/users/%s" % self.client.user_id,
+        return self._update("/OS-KSCRUD/users/%s" % self.client.get_user_id(),
                             params,
                             response_key="access",
                             method="PATCH",

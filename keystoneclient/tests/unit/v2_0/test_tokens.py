@@ -12,9 +12,11 @@
 
 import uuid
 
+from keystoneclient.auth.identity import v2
 from keystoneclient import access
 from keystoneclient import exceptions
 from keystoneclient import fixture
+from keystoneclient import session
 from keystoneclient.tests.unit.v2_0 import utils
 from keystoneclient.v2_0 import client
 from keystoneclient.v2_0 import tokens
@@ -139,7 +141,7 @@ class TokenTests(utils.TestCase):
         token_fixture.set_scope()
         self.stub_auth(json=token_fixture)
 
-        self.assertEqual(self.TEST_URL, self.client.management_url)
+        self.assertEqual(self.TEST_URL, self.client._adapter.get_endpoint())
 
         token_ref = self.client.tokens.authenticate(token=uuid.uuid4().hex)
         self.assertIsInstance(token_ref, tokens.Token)
@@ -147,21 +149,27 @@ class TokenTests(utils.TestCase):
         self.assertEqual(token_fixture.expires_str, token_ref.expires)
 
     def test_authenticate_fallback_to_auth_url(self):
-        new_auth_url = 'http://keystone.test:5000/v2.0'
+        new_url = 'http://keystone.test:5000/'
+        new_v2_url = new_url + 'v2.0'
+
+        disc_fixture = fixture.DiscoveryList(href=new_url, v3=False)
+        self.stub_url('GET', base_url=new_url, json=disc_fixture)
 
         token_fixture = fixture.V2Token()
-        self.stub_auth(base_url=new_auth_url, json=token_fixture)
+        self.stub_auth(base_url=new_v2_url, json=token_fixture)
 
-        c = client.Client(username=self.TEST_USER,
-                          auth_url=new_auth_url,
-                          password=uuid.uuid4().hex)
-
-        self.assertIsNone(c.management_url)
+        s = session.Session()
+        a = v2.Password(auth_url=new_v2_url,
+                        username=self.TEST_USER,
+                        password=uuid.uuid4().hex)
+        c = client.Client(session=s, auth=a)
 
         token_ref = c.tokens.authenticate(token=uuid.uuid4().hex)
         self.assertIsInstance(token_ref, tokens.Token)
         self.assertEqual(token_fixture.token_id, token_ref.id)
         self.assertEqual(token_fixture.expires_str, token_ref.expires)
+        self.assertEqual(self.requests_mock.last_request.url,
+                         new_v2_url + '/tokens')
 
     def test_validate_token(self):
         id_ = uuid.uuid4().hex

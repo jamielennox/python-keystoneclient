@@ -12,7 +12,11 @@
 
 import uuid
 
+from keystoneclient.auth.identity import v2
+from keystoneclient import fixture
+from keystoneclient import session
 from keystoneclient.tests.unit.v2_0 import utils
+from keystoneclient.v2_0 import client
 from keystoneclient.v2_0 import roles
 from keystoneclient.v2_0 import users
 
@@ -249,14 +253,20 @@ class UserTests(utils.TestCase):
                 'original_password': old_password
             }
         }
-        resp_body = {
-            'access': {}
-        }
-        user_id = uuid.uuid4().hex
-        self.stub_url('PATCH', ['OS-KSCRUD', 'users', user_id], json=resp_body)
+        resp_body = fixture.V2Token()
+        self.stub_auth(json=resp_body)
+        self.stub_url('PATCH',
+                      ['OS-KSCRUD', 'users', resp_body.user_id],
+                      json=resp_body)
 
-        self.client.user_id = user_id
-        self.client.users.update_own_password(old_password, new_password)
+        # have to use a real plugin here to get a user_id back from plugin
+        s = session.Session()
+        a = v2.Password(auth_url=self.TEST_URL,
+                        username='username',
+                        password=old_password)
+        c = client.Client(session=s, auth=a, endpoint_override=self.TEST_URL)
+
+        c.users.update_own_password(old_password, new_password)
         self.assertRequestBodyIs(json=req_body)
         self.assertNotIn(old_password, self.logger.output)
         self.assertNotIn(new_password, self.logger.output)
