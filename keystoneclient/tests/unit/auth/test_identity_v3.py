@@ -19,7 +19,7 @@ import mock
 from keystoneclient import access
 from keystoneclient.auth.identity import v3
 from keystoneclient.auth.identity.v3 import base as v3_base
-from keystoneclient import client
+from keystoneclient.v3 import client
 from keystoneclient import exceptions
 from keystoneclient import fixture
 from keystoneclient import session
@@ -216,12 +216,12 @@ class V3IdentityPlugin(utils.TestCase):
                         username=self.TEST_USER,
                         password=self.TEST_PASS)
         s = session.Session(auth=a)
-        cs = client.Client(session=s, auth_url=self.TEST_URL)
+        cs = client.Client(session=s)
 
         # As a sanity check on the auth_ref, make sure client has the
         # proper user id, that it fetches the right project response
-        self.assertEqual(test_user_id, a.auth_ref.user_id)
-        t = cs.projects.list(user=a.auth_ref.user_id)
+        self.assertEqual(test_user_id, s.get_user_id())
+        t = cs.projects.list(user=s.get_user_id())
         self.assertEqual(2, len(t))
 
     def test_authenticate_with_username_password_domain_scoped(self):
